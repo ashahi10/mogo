@@ -12,7 +12,15 @@ from pathlib import Path
 
 import anthropic
 
-from config import ANTHROPIC_API_KEY, CASES_FILE, MAX_TOKENS, MODEL_NAME, POLICIES_FILE, TEMPERATURE
+from config import (
+    ANTHROPIC_API_KEY,
+    ANTHROPIC_BASE_URL,
+    CASES_FILE,
+    MAX_TOKENS,
+    MODEL_NAME,
+    POLICIES_FILE,
+    TEMPERATURE,
+)
 from models import Case, Policy
 from retriever import PolicyRetriever, build_retrieval_query
 
@@ -129,7 +137,10 @@ def call_anthropic_api(system_prompt: str, user_message: str) -> str:
     - Retry exactly once after 1 second only for RateLimitError.
     - All other Anthropic errors are raised immediately.
     """
-    client = anthropic.Anthropic()
+    client = anthropic.Anthropic(
+        api_key=ANTHROPIC_API_KEY,
+        base_url=ANTHROPIC_BASE_URL or None,
+    )
 
     def _invoke() -> str:
         response = client.messages.create(

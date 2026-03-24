@@ -37,6 +37,12 @@ ESCALATE_ON_VALIDATION_FAILURE = True
 # API key used by Anthropic client; loaded from environment/.env.
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
+# Optional override for Anthropic SDK base URL.
+# Useful when routing Anthropic-format requests via OpenRouter, etc.
+# For OpenRouter Anthropic Messages compatibility, set:
+#   ANTHROPIC_BASE_URL=https://openrouter.ai/api
+ANTHROPIC_BASE_URL = os.environ.get("ANTHROPIC_BASE_URL")
+
 if not ANTHROPIC_API_KEY:
     print(
         "Warning: ANTHROPIC_API_KEY is not set. "
