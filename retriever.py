@@ -5,6 +5,7 @@ and exposes search_policies() for similarity-based policy lookup.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 import re
@@ -12,7 +13,7 @@ import re
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-from config import RETRIEVAL_TOP_K
+from config import CASES_FILE, POLICIES_FILE, RETRIEVAL_TOP_K
 from models import Case, Policy
 
 
@@ -176,3 +177,40 @@ def build_retrieval_query(case: Case) -> str:
         pass
 
     return " ".join(parts)
+
+
+def validate_setup(policies_path: str, cases_path: str) -> None:
+    """Validate core dataset setup before running retrieval-dependent flows."""
+    try:
+        policies = load_policies(policies_path)
+        if len(policies) < 5:
+            raise RuntimeError(
+                f"Setup validation failed: expected at least 5 policies, found {len(policies)}."
+            )
+    except Exception as exc:
+        raise RuntimeError(
+            f"Setup validation failed while loading policies from '{policies_path}': {exc}"
+        ) from exc
+
+    try:
+        with open(cases_path, "r", encoding="utf-8") as handle:
+            cases_data = json.load(handle)
+    except Exception as exc:
+        raise RuntimeError(
+            f"Setup validation failed while reading cases from '{cases_path}': {exc}"
+        ) from exc
+
+    if not isinstance(cases_data, list):
+        raise RuntimeError(
+            f"Setup validation failed: expected JSON array in '{cases_path}'."
+        )
+    if len(cases_data) < 10:
+        raise RuntimeError(
+            f"Setup validation failed: expected at least 10 cases, found {len(cases_data)}."
+        )
+
+    print(f"Setup validated: {len(policies)} policies, {len(cases_data)} cases loaded.")
+
+
+if __name__ == "__main__":
+    validate_setup(POLICIES_FILE, CASES_FILE)
