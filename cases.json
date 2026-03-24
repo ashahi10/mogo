@@ -1,1 +1,254 @@
-[]
+[
+  {
+    "case_id": "CASE-001",
+    "summary": "Customer requested a routine payout after six months of stable account activity with verified identity and matching legal name records.",
+    "attributes": {
+      "case_type": "payout_review",
+      "payout_amount": 320.0,
+      "identity_verified": true,
+      "verified_name": "Ariana Patel",
+      "account_holder_name": "Ariana Patel",
+      "recent_profile_changes": 0,
+      "high_risk_flag": false,
+      "account_age_days": 210,
+      "missing_fields": [],
+      "transaction_velocity": 1
+    },
+    "expected_decision": "APPROVE",
+    "difficulty": "straightforward"
+  },
+  {
+    "case_id": "CASE-002",
+    "summary": "Payout request submitted from an account where identity verification previously failed and no successful re-verification has been recorded.",
+    "attributes": {
+      "case_type": "payout_review",
+      "payout_amount": 740.0,
+      "identity_verified": false,
+      "verified_name": "Rahul Menon",
+      "account_holder_name": "Rahul Menon",
+      "recent_profile_changes": 0,
+      "high_risk_flag": false,
+      "account_age_days": 140,
+      "missing_fields": [],
+      "transaction_velocity": 2
+    },
+    "expected_decision": "DENY",
+    "difficulty": "straightforward"
+  },
+  {
+    "case_id": "CASE-003",
+    "summary": "A recently opened account requested a payout significantly above the new-account threshold while all other signals remained ordinary.",
+    "attributes": {
+      "case_type": "payout_review",
+      "payout_amount": 1500.0,
+      "identity_verified": true,
+      "verified_name": "Mina Kaur",
+      "account_holder_name": "Mina Kaur",
+      "recent_profile_changes": 1,
+      "high_risk_flag": false,
+      "account_age_days": 18,
+      "missing_fields": [],
+      "transaction_velocity": 1
+    },
+    "expected_decision": "DENY",
+    "difficulty": "straightforward"
+  },
+  {
+    "case_id": "CASE-004",
+    "summary": "Established customer requested a low-value payout with consistent profile history and no fraud or risk indicators.",
+    "attributes": {
+      "case_type": "payout_review",
+      "payout_amount": 450.0,
+      "identity_verified": true,
+      "verified_name": "Daniel Romero",
+      "account_holder_name": "Daniel Romero",
+      "recent_profile_changes": 1,
+      "high_risk_flag": false,
+      "account_age_days": 400,
+      "missing_fields": [],
+      "transaction_velocity": 1
+    },
+    "expected_decision": "APPROVE",
+    "difficulty": "straightforward"
+  },
+  {
+    "case_id": "CASE-005",
+    "summary": "Account is fully verified and otherwise clean, but it carries an active high-risk designation from the fraud monitoring system.",
+    "attributes": {
+      "case_type": "payout_review",
+      "payout_amount": 380.0,
+      "identity_verified": true,
+      "verified_name": "Leah Bennett",
+      "account_holder_name": "Leah Bennett",
+      "recent_profile_changes": 0,
+      "high_risk_flag": true,
+      "account_age_days": 260,
+      "missing_fields": [],
+      "transaction_velocity": 1
+    },
+    "expected_decision": "ESCALATE",
+    "difficulty": "ambiguous"
+  },
+  {
+    "case_id": "CASE-006",
+    "summary": "Customer with long-tenured account submitted a moderate payout and passed all identity, profile stability, and risk checks.",
+    "attributes": {
+      "case_type": "payout_review",
+      "payout_amount": 900.0,
+      "identity_verified": true,
+      "verified_name": "Ibrahim Farooq",
+      "account_holder_name": "Ibrahim Farooq",
+      "recent_profile_changes": 1,
+      "high_risk_flag": false,
+      "account_age_days": 520,
+      "missing_fields": [],
+      "transaction_velocity": 2
+    },
+    "expected_decision": "APPROVE",
+    "difficulty": "straightforward"
+  },
+  {
+    "case_id": "CASE-007",
+    "summary": "Payout request followed three profile updates in the prior 24 hours, including password reset, email change, and bank detail update.",
+    "attributes": {
+      "case_type": "payout_review",
+      "payout_amount": 680.0,
+      "identity_verified": true,
+      "verified_name": "Nora Blake",
+      "account_holder_name": "Nora Blake",
+      "recent_profile_changes": 3,
+      "high_risk_flag": false,
+      "account_age_days": 190,
+      "missing_fields": [],
+      "transaction_velocity": 3
+    },
+    "expected_decision": "DENY",
+    "difficulty": "straightforward"
+  },
+  {
+    "case_id": "CASE-008",
+    "summary": "First payout from a mature account was requested with complete documentation and no anomalies in recent account behavior.",
+    "attributes": {
+      "case_type": "payout_review",
+      "payout_amount": 210.0,
+      "identity_verified": true,
+      "verified_name": "Sofia Almeida",
+      "account_holder_name": "Sofia Almeida",
+      "recent_profile_changes": 0,
+      "high_risk_flag": false,
+      "account_age_days": 330,
+      "missing_fields": [],
+      "transaction_velocity": 1
+    },
+    "expected_decision": "APPROVE",
+    "difficulty": "straightforward"
+  },
+  {
+    "case_id": "CASE-009",
+    "summary": "Identity appears verified, but the account holder name is listed with an abbreviated first name during a mid-sized payout request.",
+    "attributes": {
+      "case_type": "payout_review",
+      "payout_amount": 1200.0,
+      "identity_verified": true,
+      "verified_name": "Jonathan Price",
+      "account_holder_name": "J. Price",
+      "recent_profile_changes": 1,
+      "high_risk_flag": false,
+      "account_age_days": 170,
+      "missing_fields": [],
+      "transaction_velocity": 2
+    },
+    "expected_decision": "ESCALATE",
+    "difficulty": "ambiguous"
+  },
+  {
+    "case_id": "CASE-010",
+    "summary": "Low-value payout request from a verified and stable account carries an active high-risk flag that conflicts with otherwise clean signals.",
+    "attributes": {
+      "case_type": "payout_review",
+      "payout_amount": 200.0,
+      "identity_verified": true,
+      "verified_name": "Emily Chen",
+      "account_holder_name": "Emily Chen",
+      "recent_profile_changes": 0,
+      "high_risk_flag": true,
+      "account_age_days": 480,
+      "missing_fields": [],
+      "transaction_velocity": 1
+    },
+    "expected_decision": "ESCALATE",
+    "difficulty": "ambiguous"
+  },
+  {
+    "case_id": "CASE-011",
+    "summary": "A payout above the strict name-check threshold was submitted with a clear mismatch between verified identity and account holder name.",
+    "attributes": {
+      "case_type": "payout_review",
+      "payout_amount": 1700.0,
+      "identity_verified": true,
+      "verified_name": "Priya Srinivasan",
+      "account_holder_name": "Rohit Srinivasan",
+      "recent_profile_changes": 0,
+      "high_risk_flag": false,
+      "account_age_days": 275,
+      "missing_fields": [],
+      "transaction_velocity": 1
+    },
+    "expected_decision": "DENY",
+    "difficulty": "straightforward"
+  },
+  {
+    "case_id": "CASE-012",
+    "summary": "Account age and payout amount fall into a policy gray zone where customer tenure is moderate but transaction size is above routine levels.",
+    "attributes": {
+      "case_type": "payout_review",
+      "payout_amount": 950.0,
+      "identity_verified": true,
+      "verified_name": "Marcus Hill",
+      "account_holder_name": "Marcus Hill",
+      "recent_profile_changes": 1,
+      "high_risk_flag": false,
+      "account_age_days": 45,
+      "missing_fields": [],
+      "transaction_velocity": 2
+    },
+    "expected_decision": "ESCALATE",
+    "difficulty": "ambiguous"
+  },
+  {
+    "case_id": "CASE-013",
+    "summary": "Case record is otherwise clean but missing identity verification status and payout amount, preventing a reliable automated decision.",
+    "attributes": {
+      "case_type": "payout_review",
+      "payout_amount": null,
+      "identity_verified": null,
+      "verified_name": "Sanjay Das",
+      "account_holder_name": "Sanjay Das",
+      "recent_profile_changes": 0,
+      "high_risk_flag": false,
+      "account_age_days": 220,
+      "missing_fields": ["identity_verified", "payout_amount"],
+      "transaction_velocity": 1
+    },
+    "expected_decision": "ESCALATE",
+    "difficulty": "edge"
+  },
+  {
+    "case_id": "CASE-014",
+    "summary": "System marks identity as verified, but the account holder value is UNKNOWN, creating a direct conflict in core identity signals.",
+    "attributes": {
+      "case_type": "payout_review",
+      "payout_amount": 620.0,
+      "identity_verified": true,
+      "verified_name": "Sarah Chen",
+      "account_holder_name": "UNKNOWN",
+      "recent_profile_changes": 1,
+      "high_risk_flag": false,
+      "account_age_days": 130,
+      "missing_fields": [],
+      "transaction_velocity": 2
+    },
+    "expected_decision": "ESCALATE",
+    "difficulty": "edge"
+  }
+]
