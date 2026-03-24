@@ -7,13 +7,16 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from datetime import datetime, timezone
 
 from pydantic import ValidationError
 
-from agent import SYSTEM_PROMPT, build_user_message, call_anthropic_api
+from agent import DecisionAgent, SYSTEM_PROMPT, build_user_message, call_anthropic_api
+from config import CASES_FILE, POLICIES_FILE
 from config import CONFIDENCE_THRESHOLD, ESCALATE_ON_MISSING_FIELDS, ESCALATE_ON_RETRIEVAL_FAILURE
 from models import Case, DecisionOutput, Policy
+from retriever import PolicyRetriever
 
 
 CORRECTION_PROMPT_TEMPLATE = """
@@ -246,3 +249,63 @@ class EscalationChecker:
             )
         except Exception:
             return output
+
+
+def run_pipeline(case: Case, agent: DecisionAgent) -> DecisionOutput:
+    """
+    Execute full case pipeline: decide -> validate/retry -> escalation checks.
+
+    This function is designed to never raise under runtime failure conditions.
+    """
+    try:
+        raw_response, retrieved = agent.decide(case)
+        validated = validate_with_retry(raw_response, case.case_id, retrieved, agent, case)
+        return EscalationChecker().check(validated, case, retrieved)
+    except Exception as exc:
+        print(f"run_pipeline error: {exc}", file=sys.stderr)
+        fallback_payload = {
+            "case_id": case.case_id,
+            "decision": "ESCALATE",
+            "confidence": 0.0,
+            "policy_citations": [
+                {
+                    "policy_id": "POL-007",
+                    "reason": "Automatic escalation: pipeline runtime failure",
+                }
+            ],
+            "audit_log": {
+                "retrieved_policies": [],
+                "retrieval_score": 0.0,
+                "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "retry_attempted": False,
+                "error_detail": f"Pipeline exception: {exc}",
+            },
+        }
+        return DecisionOutput(**fallback_payload)
+
+
+if __name__ == "__main__":
+    try:
+        cases_data = json.loads(open(CASES_FILE, "r", encoding="utf-8").read())
+        case_map = {entry["case_id"]: Case(**entry) for entry in cases_data}
+
+        # This smoke path intentionally performs 2 real API calls.
+        retriever = PolicyRetriever(POLICIES_FILE)
+        decision_agent = DecisionAgent(retriever)
+
+        for case_id in ("CASE-001", "CASE-013"):
+            case = case_map[case_id]
+            result = run_pipeline(case, decision_agent)
+            print(f"Case ID: {case.case_id} ({case.difficulty})")
+            print(f"Decision: {result.decision} | Confidence: {result.confidence}")
+            citation_summary = "; ".join(
+                f"{c.policy_id}: {c.reason}" for c in result.policy_citations
+            )
+            print(f"Policy Citations: {citation_summary}")
+            print(f"Retry Attempted: {result.audit_log.retry_attempted}")
+            if result.audit_log.error_detail:
+                print(f"Error Detail: {result.audit_log.error_detail}")
+            print("---")
+    except Exception as exc:
+        print(f"validator.py smoke test failed: {exc}", file=sys.stderr)
+        sys.exit(1)
