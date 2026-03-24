@@ -28,6 +28,17 @@ class CaseAttributes(BaseModel):
     account_age_days: Optional[int] = None
     missing_fields: list[str] = Field(default_factory=list)
     transaction_velocity: Optional[int] = None
+    device_trust_score: Optional[float] = None
+    geolocation_mismatch: Optional[bool] = None
+    impossible_travel_flag: Optional[bool] = None
+    recent_password_reset_hours: Optional[int] = None
+    payout_destination_recently_changed: Optional[bool] = None
+    kyc_age_days: Optional[int] = None
+    kyc_confidence: Optional[float] = None
+    sanctions_watchlist_hit: Optional[bool] = None
+    historical_avg_payout: Optional[float] = None
+    historical_payout_stddev: Optional[float] = None
+    data_conflict_flag: Optional[bool] = None
 
     @field_validator("payout_amount")
     @classmethod
@@ -50,6 +61,30 @@ class CaseAttributes(BaseModel):
             raise ValueError("recent_profile_changes must be non-negative")
         return value
 
+    @field_validator("device_trust_score", "kyc_confidence")
+    @classmethod
+    def probability_fields_in_range(cls, value: Optional[float]) -> Optional[float]:
+        if value is not None and not 0.0 <= value <= 1.0:
+            raise ValueError("probability-like fields must be between 0.0 and 1.0")
+        return value
+
+    @field_validator(
+        "recent_password_reset_hours",
+        "kyc_age_days",
+    )
+    @classmethod
+    def non_negative_integer_fields(cls, value: Optional[int]) -> Optional[int]:
+        if value is not None and value < 0:
+            raise ValueError("integer risk metadata fields must be non-negative")
+        return value
+
+    @field_validator("historical_avg_payout", "historical_payout_stddev")
+    @classmethod
+    def non_negative_float_fields(cls, value: Optional[float]) -> Optional[float]:
+        if value is not None and value < 0:
+            raise ValueError("historical payout fields must be non-negative")
+        return value
+
 
 class Case(BaseModel):
     """Top-level case model used as pipeline input."""
@@ -61,6 +96,8 @@ class Case(BaseModel):
     attributes: CaseAttributes
     expected_decision: Literal["APPROVE", "DENY", "ESCALATE"]
     difficulty: Literal["straightforward", "ambiguous", "edge"]
+    scenario_type: Optional[str] = None
+    notes: Optional[str] = None
 
     @field_validator("case_id")
     @classmethod

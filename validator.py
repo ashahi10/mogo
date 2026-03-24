@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from pydantic import ValidationError
@@ -71,6 +72,17 @@ def parse_and_validate(
             parsed = json.loads(cleaned)
         except json.JSONDecodeError as exc:
             return None, f"JSON parse error: {exc}"
+        if not isinstance(parsed, dict):
+            return None, "Validation error: top-level response must be a JSON object"
+
+        allowed_keys = {"decision", "confidence", "policy_citations"}
+        unexpected_keys = sorted(set(parsed.keys()) - allowed_keys)
+        if unexpected_keys:
+            return (
+                None,
+                "Validation error: unexpected fields in response: "
+                + ", ".join(unexpected_keys),
+            )
 
         retrieved_ids = [policy.policy_id for policy in retrieved]
         retrieval_score = max((policy.similarity_score for policy in retrieved), default=0.0)
@@ -250,6 +262,112 @@ class EscalationChecker:
             )
         except Exception:
             return output
+
+
+@dataclass
+class GuardrailIndicators:
+    """Aggregate guardrail observability indicators for analysis/reporting."""
+
+    total_outputs: int
+    citation_drift_count: int
+    citation_drift_rate: float
+    citation_drift_severity: str
+    contradiction_flag_count: int
+
+
+def detect_case_contradiction(case: Case) -> bool:
+    """Detect structural contradiction signals from case attributes."""
+    attrs = case.attributes
+    if attrs.identity_verified is True:
+        verified_name = (attrs.verified_name or "").strip().lower()
+        holder_name = (attrs.account_holder_name or "").strip().lower()
+        if (
+            not verified_name
+            or not holder_name
+            or verified_name == "unknown"
+            or holder_name == "unknown"
+        ):
+            return True
+    return bool(attrs.data_conflict_flag)
+
+
+def compute_guardrail_indicators(
+    outputs: list[DecisionOutput],
+    cases: list[Case] | None = None,
+) -> GuardrailIndicators:
+    """
+    Compute non-invasive observability indicators for validation guardrails.
+
+    - citation drift: audit entries where non-retrieved citations were stripped
+    - contradiction flags: structurally contradictory case inputs
+    """
+    total = len(outputs)
+    citation_drift_count = sum(
+        1
+        for output in outputs
+        if output.audit_log.error_detail
+        and "Removed non-retrieved policy citations" in output.audit_log.error_detail
+    )
+    citation_drift_rate = citation_drift_count / total if total else 0.0
+    if citation_drift_rate >= 0.20:
+        severity = "high"
+    elif citation_drift_rate >= 0.05:
+        severity = "medium"
+    else:
+        severity = "low"
+
+    contradiction_count = sum(1 for case in (cases or []) if detect_case_contradiction(case))
+    return GuardrailIndicators(
+        total_outputs=total,
+        citation_drift_count=citation_drift_count,
+        citation_drift_rate=citation_drift_rate,
+        citation_drift_severity=severity,
+        contradiction_flag_count=contradiction_count,
+    )
+
+
+def confidence_calibration_snapshot(
+    outputs: list[DecisionOutput],
+    expected_by_case_id: dict[str, str] | None = None,
+) -> dict[str, dict[str, float]]:
+    """
+    Produce bucketed confidence calibration stats.
+
+    If expected labels are provided, each bucket includes empirical accuracy.
+    """
+    buckets = {
+        "0.00-0.49": [],
+        "0.50-0.64": [],
+        "0.65-0.79": [],
+        "0.80-1.00": [],
+    }
+    for output in outputs:
+        conf = output.confidence
+        if conf < 0.50:
+            buckets["0.00-0.49"].append(output)
+        elif conf < 0.65:
+            buckets["0.50-0.64"].append(output)
+        elif conf < 0.80:
+            buckets["0.65-0.79"].append(output)
+        else:
+            buckets["0.80-1.00"].append(output)
+
+    snapshot: dict[str, dict[str, float]] = {}
+    for bucket, bucket_outputs in buckets.items():
+        total = len(bucket_outputs)
+        avg_confidence = (
+            sum(output.confidence for output in bucket_outputs) / total if total else 0.0
+        )
+        entry = {"count": float(total), "avg_confidence": avg_confidence}
+        if expected_by_case_id:
+            correct = sum(
+                1
+                for output in bucket_outputs
+                if expected_by_case_id.get(output.case_id) == output.decision
+            )
+            entry["accuracy"] = (correct / total) if total else 0.0
+        snapshot[bucket] = entry
+    return snapshot
 
 
 def run_pipeline(case: Case, agent: DecisionAgent) -> DecisionOutput:

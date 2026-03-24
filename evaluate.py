@@ -5,8 +5,10 @@ metrics, and prints the formatted evaluation report.
 
 from __future__ import annotations
 
+import argparse
 from dataclasses import dataclass
 import json
+import os
 import sys
 import time
 
@@ -49,6 +51,18 @@ class Metrics:
     edge_total: int
     retry_attempted_count: int
     avg_confidence: float
+
+
+MODE_FILE_MAP = {
+    "baseline": {
+        "cases_file": CASES_FILE,
+        "policies_file": POLICIES_FILE,
+    },
+    "extended": {
+        "cases_file": "cases_extended.json",
+        "policies_file": "policies_extended.md",
+    },
+}
 
 
 def compute_metrics(results: list[EvalResult]) -> Metrics:
@@ -157,15 +171,44 @@ def _print_report(results: list[EvalResult], metrics: Metrics, runtime_s: float)
     print(f"Runtime: {runtime_s:.2f}s")
 
 
+def _resolve_mode() -> str:
+    """Resolve evaluation mode from CLI and environment."""
+    parser = argparse.ArgumentParser(
+        description="Run Orion evaluation in baseline or extended mode."
+    )
+    parser.add_argument(
+        "--mode",
+        choices=("baseline", "extended"),
+        help="Evaluation mode (overrides EVAL_MODE if set).",
+    )
+    args = parser.parse_args()
+
+    env_mode = os.environ.get("EVAL_MODE", "").strip().lower()
+    if args.mode:
+        return args.mode
+    if env_mode in MODE_FILE_MAP:
+        return env_mode
+    return "baseline"
+
+
 if __name__ == "__main__":
     start = time.time()
     results: list[EvalResult] = []
 
-    with open(CASES_FILE, "r", encoding="utf-8") as handle:
+    mode = _resolve_mode()
+    file_config = MODE_FILE_MAP[mode]
+    cases_file = file_config["cases_file"]
+    policies_file = file_config["policies_file"]
+
+    with open(cases_file, "r", encoding="utf-8") as handle:
         raw_cases = json.load(handle)
 
-    retriever = PolicyRetriever(POLICIES_FILE)
+    retriever = PolicyRetriever(policies_file)
     agent = DecisionAgent(retriever)
+
+    print(f"Running evaluation mode: {mode}", file=sys.stderr)
+    print(f"Using cases file: {cases_file}", file=sys.stderr)
+    print(f"Using policies file: {policies_file}", file=sys.stderr)
 
     for index, raw_case in enumerate(raw_cases, start=1):
         raw_case_id = raw_case.get("case_id", f"UNKNOWN-{index:03d}")

@@ -1,1 +1,15 @@
-<!-- System design writeup — filled in M6 -->
+## How the system works
+
+The pipeline is a single-pass compliance decision flow. For each case, I first validate and normalize input into a typed `Case` model, then build an enriched retrieval query from both the summary and structured risk attributes. That query goes through a TF-IDF retriever and returns the top policies for the case. I then send only the case context plus those retrieved policies to the model, and the model returns strict JSON (`decision`, `confidence`, `policy_citations`). The output is never trusted directly: it is parsed, schema-validated with Pydantic, checked for citation integrity, retried once with a correction prompt if invalid, and finally passed through deterministic escalation safeguards. If any stage fails, the system returns a structured ESCALATE output instead of crashing. I chose TF-IDF over embeddings for the base assignment because the corpus is tiny, static, and explainable, and TF-IDF gives fast local retrieval without extra infrastructure. To go beyond baseline, I also added extended policy/case packs and stress tests so the same pipeline can be evaluated under harder scenarios.
+
+## When and why we escalate
+
+Escalation is treated as a valid governed outcome, not a fallback error path. The system escalates when confidence is below 0.65, when required fields are missing, when retrieval returns no usable policies, when output validation fails after retry, and when deterministic contradiction checks detect structurally unsafe identity data (for example unknown identity names in a supposedly verified case). This design is intentional: in compliance workflows, uncertainty should move to human review instead of being forced into automated approve/deny decisions. I kept domain decisions policy-grounded in retrieved text and reserved hardcoded rules for safety constraints only. That separation helps keep the system auditable and easier to tune.
+
+## Biggest failure case
+
+The biggest practical failure mode is retrieval miss under vocabulary shift. With short policy documents and lexical TF-IDF matching, semantically related but differently phrased cases can retrieve weaker policy context than they should. In baseline data this is less visible because policy language and case phrasing are aligned. In extended mode, harder cases exposed this more clearly: accuracy stayed strong overall, but edge-case escalation quality dropped when policy overlap was indirect. In other words, the model can reason well when grounded with the right rules, but retrieval quality is still the dominant bottleneck.
+
+## One thing I'd improve with more time
+
+I would replace TF-IDF retrieval with an embedding-based retriever (or hybrid lexical + embedding ranker) while keeping the rest of the architecture unchanged. That would directly target the vocabulary-shift failure mode and improve policy grounding on ambiguous real-world wording. I would also keep the new stress harness and add calibration tracking over time: bucket confidence values and compare them to observed correctness so confidence becomes an interpretable signal, not just a model output. That combination would give better robustness without sacrificing the assignment’s core design principle: structured, auditable decisions that fail safely.

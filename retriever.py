@@ -176,6 +176,74 @@ def build_retrieval_query(case: Case) -> str:
     except Exception:
         pass
 
+    try:
+        if attrs.impossible_travel_flag is True:
+            parts.append("impossible travel geolocation anomaly")
+    except Exception:
+        pass
+
+    try:
+        if attrs.geolocation_mismatch is True:
+            parts.append("geolocation mismatch unusual location")
+    except Exception:
+        pass
+
+    try:
+        if attrs.device_trust_score is not None and attrs.device_trust_score < 0.4:
+            parts.append("low device trust unfamiliar device")
+    except Exception:
+        pass
+
+    try:
+        if (
+            attrs.recent_password_reset_hours is not None
+            and attrs.recent_password_reset_hours <= 24
+        ):
+            parts.append("recent password reset account security event")
+    except Exception:
+        pass
+
+    try:
+        if attrs.payout_destination_recently_changed is True:
+            parts.append("recent payout destination change beneficiary update")
+    except Exception:
+        pass
+
+    try:
+        if attrs.kyc_age_days is not None and attrs.kyc_age_days > 365:
+            parts.append("stale kyc profile reverification required")
+    except Exception:
+        pass
+
+    try:
+        if attrs.kyc_confidence is not None and attrs.kyc_confidence < 0.6:
+            parts.append("low confidence kyc verification")
+    except Exception:
+        pass
+
+    try:
+        if attrs.sanctions_watchlist_hit is True:
+            parts.append("watchlist hit sanctions screening escalation")
+    except Exception:
+        pass
+
+    try:
+        if attrs.data_conflict_flag is True:
+            parts.append("conflicting data source disagreement")
+    except Exception:
+        pass
+
+    try:
+        if (
+            attrs.historical_avg_payout is not None
+            and attrs.payout_amount is not None
+            and attrs.historical_avg_payout > 0
+            and attrs.payout_amount > attrs.historical_avg_payout * 3
+        ):
+            parts.append("payout pattern drift amount anomaly")
+    except Exception:
+        pass
+
     return " ".join(parts)
 
 
