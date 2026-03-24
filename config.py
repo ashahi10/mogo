@@ -1,6 +1,7 @@
 """Centralized configuration constants for Orion AI Decision Agent."""
 
 import os
+import sys
 
 from dotenv import load_dotenv
 
@@ -39,5 +40,6 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 if not ANTHROPIC_API_KEY:
     print(
         "Warning: ANTHROPIC_API_KEY is not set. "
-        "API calls will fail until you configure it in your environment or .env file."
+        "API calls will fail until you configure it in your environment or .env file.",
+        file=sys.stderr,
     )
