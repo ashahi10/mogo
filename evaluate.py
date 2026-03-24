@@ -47,6 +47,8 @@ class Metrics:
     straight_total: int
     edge_escalated_count: int
     edge_total: int
+    retry_attempted_count: int
+    avg_confidence: float
 
 
 def compute_metrics(results: list[EvalResult]) -> Metrics:
@@ -61,6 +63,10 @@ def compute_metrics(results: list[EvalResult]) -> Metrics:
     ambiguous_escalated_count = sum(1 for row in ambiguous if row.got == "ESCALATE")
     straight_not_escalated_count = sum(1 for row in straightforward if row.got != "ESCALATE")
     edge_escalated_count = sum(1 for row in edge if row.got == "ESCALATE")
+    retry_attempted_count = sum(1 for row in results if row.retry_attempted)
+    avg_confidence = (
+        sum(row.confidence for row in results) / total if total else 0.0
+    )
 
     return Metrics(
         total=total,
@@ -81,6 +87,8 @@ def compute_metrics(results: list[EvalResult]) -> Metrics:
         straight_total=len(straightforward),
         edge_escalated_count=edge_escalated_count,
         edge_total=len(edge),
+        retry_attempted_count=retry_attempted_count,
+        avg_confidence=avg_confidence,
     )
 
 
@@ -129,6 +137,13 @@ def _print_report(results: list[EvalResult], metrics: Metrics, runtime_s: float)
         f"{'✓' if edge_pass else '✗'} target 100%"
     )
     print()
+    print("Operational indicators:")
+    print(
+        f"  Retry attempted cases: {metrics.retry_attempted_count}/{metrics.total} "
+        f"({(metrics.retry_attempted_count / metrics.total * 100) if metrics.total else 0.0:.1f}%)"
+    )
+    print(f"  Average confidence   : {metrics.avg_confidence:.3f}")
+    print()
     print("------------------------------------------------------------")
     print("  Per-case breakdown")
     print("------------------------------------------------------------")
@@ -148,29 +163,49 @@ if __name__ == "__main__":
 
     with open(CASES_FILE, "r", encoding="utf-8") as handle:
         raw_cases = json.load(handle)
-    cases = [Case(**item) for item in raw_cases]
 
     retriever = PolicyRetriever(POLICIES_FILE)
     agent = DecisionAgent(retriever)
 
-    for index, case in enumerate(cases, start=1):
-        print(f"Processing {case.case_id} ({index}/{len(cases)})...", file=sys.stderr)
+    for index, raw_case in enumerate(raw_cases, start=1):
+        raw_case_id = raw_case.get("case_id", f"UNKNOWN-{index:03d}")
+        print(f"Processing {raw_case_id} ({index}/{len(raw_cases)})...", file=sys.stderr)
+
+        expected = raw_case.get("expected_decision", "ESCALATE")
+        difficulty = raw_case.get("difficulty", "edge")
+
+        try:
+            case = Case(**raw_case)
+        except Exception as exc:
+            print(f"Error while validating {raw_case_id}: {exc}", file=sys.stderr)
+            results.append(
+                EvalResult(
+                    case_id=raw_case_id,
+                    difficulty=difficulty,
+                    expected=expected,
+                    got="ESCALATE",
+                    confidence=0.0,
+                    retry_attempted=True,
+                )
+            )
+            continue
+
         try:
             decision = run_pipeline(case, agent)
             got = decision.decision
             confidence = decision.confidence
             retry_attempted = decision.audit_log.retry_attempted
         except Exception as exc:
-            print(f"Error while processing {case.case_id}: {exc}", file=sys.stderr)
+            print(f"Error while processing {raw_case_id}: {exc}", file=sys.stderr)
             got = "ESCALATE"
             confidence = 0.0
             retry_attempted = True
 
         results.append(
             EvalResult(
-                case_id=case.case_id,
-                difficulty=case.difficulty,
-                expected=case.expected_decision,
+                case_id=raw_case_id,
+                difficulty=difficulty,
+                expected=expected,
                 got=got,
                 confidence=confidence,
                 retry_attempted=retry_attempted,
