@@ -11,7 +11,32 @@ from datetime import datetime, timezone
 
 from pydantic import ValidationError
 
-from models import DecisionOutput, Policy, PolicyCitation
+from agent import SYSTEM_PROMPT, build_user_message, call_anthropic_api
+from models import Case, DecisionOutput, Policy
+
+
+CORRECTION_PROMPT_TEMPLATE = """
+Your previous response was invalid. Here is why:
+
+ERROR: {error_message}
+
+YOUR INVALID RESPONSE:
+{invalid_response}
+
+You must return ONLY a valid JSON object matching this schema exactly:
+{{
+  "decision": "APPROVE" | "DENY" | "ESCALATE",
+  "confidence": <float 0.0-1.0>,
+  "policy_citations": [
+    {{"policy_id": "<from provided policies only>", "reason": "<explanation>"}}
+  ]
+}}
+
+Re-evaluate the case and respond now.
+
+ORIGINAL CASE:
+{original_user_message}
+""".strip()
 
 
 _CODE_FENCE_RE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.IGNORECASE | re.MULTILINE)
@@ -92,3 +117,69 @@ def parse_and_validate(
         return output, None
     except Exception as exc:
         return None, f"Unexpected validation error: {exc}"
+
+
+def validate_with_retry(
+    raw_response: str,
+    case_id: str,
+    retrieved: list[Policy],
+    agent: object,  # kept for signature compatibility in milestone contract
+    case: Case,
+) -> DecisionOutput:
+    """
+    Validate raw output, retry once with correction prompt, then escalate fallback.
+
+    Returns DecisionOutput on every normal runtime path.
+    """
+    output, first_error = parse_and_validate(raw_response, case_id, retrieved)
+    if output is not None:
+        return output.model_copy(
+            update={"audit_log": output.audit_log.model_copy(update={"retry_attempted": False})}
+        )
+
+    second_error = "Retry not attempted"
+    try:
+        original_user_message = build_user_message(case, retrieved)
+        correction_prompt = CORRECTION_PROMPT_TEMPLATE.format(
+            error_message=first_error or "Unknown validation failure",
+            invalid_response=raw_response,
+            original_user_message=original_user_message,
+        )
+        retry_response = call_anthropic_api(SYSTEM_PROMPT, correction_prompt)
+        retry_output, retry_error = parse_and_validate(retry_response, case_id, retrieved)
+        if retry_output is not None:
+            return retry_output.model_copy(
+                update={
+                    "audit_log": retry_output.audit_log.model_copy(
+                        update={"retry_attempted": True}
+                    )
+                }
+            )
+        second_error = retry_error or "Unknown retry validation failure"
+    except Exception as exc:
+        second_error = f"Retry call failed: {exc}"
+
+    fallback_policy_id = retrieved[0].policy_id if retrieved else "POL-007"
+    fallback_payload = {
+        "case_id": case_id,
+        "decision": "ESCALATE",
+        "confidence": 0.0,
+        "policy_citations": [
+            {
+                "policy_id": fallback_policy_id,
+                "reason": "Automatic escalation: output validation failed after retry",
+            }
+        ],
+        "audit_log": {
+            "retrieved_policies": [policy.policy_id for policy in retrieved],
+            "retrieval_score": float(
+                max((policy.similarity_score for policy in retrieved), default=0.0)
+            ),
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "retry_attempted": True,
+            "error_detail": (
+                f"Attempt 1: {first_error or 'Unknown'} | Attempt 2: {second_error}"
+            ),
+        },
+    }
+    return DecisionOutput(**fallback_payload)
