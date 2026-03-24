@@ -6,11 +6,13 @@ Claude API call to produce structured compliance decisions per case.
 from __future__ import annotations
 
 import json
+import sys
 import time
+from pathlib import Path
 
 import anthropic
 
-from config import MAX_TOKENS, MODEL_NAME, TEMPERATURE
+from config import ANTHROPIC_API_KEY, CASES_FILE, MAX_TOKENS, MODEL_NAME, POLICIES_FILE, TEMPERATURE
 from models import Case, Policy
 from retriever import PolicyRetriever, build_retrieval_query
 
@@ -216,3 +218,33 @@ class DecisionAgent:
             ],
         }
         return json.dumps(payload)
+
+
+if __name__ == "__main__":
+    if not ANTHROPIC_API_KEY:
+        print(
+            "Missing ANTHROPIC_API_KEY. "
+            "Set it in your environment or .env before running agent smoke test."
+        )
+        sys.exit(1)
+
+    try:
+        cases_path = Path(CASES_FILE)
+        cases_data = json.loads(cases_path.read_text(encoding="utf-8"))
+        if not cases_data:
+            print("No cases found in cases.json; smoke test requires at least one case.")
+            sys.exit(1)
+
+        # This smoke path intentionally performs one real API call.
+        sample_case = Case(**cases_data[0])
+        retriever = PolicyRetriever(POLICIES_FILE)
+        decision_agent = DecisionAgent(retriever)
+        raw_response, retrieved_policies = decision_agent.decide(sample_case)
+
+        retrieved_ids = ", ".join(policy.policy_id for policy in retrieved_policies) or "none"
+        print(f"Case ID: {sample_case.case_id}")
+        print(f"Retrieved Policies: {retrieved_ids}")
+        print(f"Raw Response: {raw_response}")
+    except Exception as exc:
+        print(f"Smoke test failed: {exc}")
+        sys.exit(1)
