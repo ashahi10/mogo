@@ -220,7 +220,8 @@ class EscalationChecker:
                 verified_name = (case.attributes.verified_name or "").strip().lower()
                 holder_name = (case.attributes.account_holder_name or "").strip().lower()
                 if (
-                    (verified_name and holder_name and verified_name != holder_name)
+                    not verified_name
+                    or not holder_name
                     or verified_name == "unknown"
                     or holder_name == "unknown"
                 ):
