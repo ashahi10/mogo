@@ -5,6 +5,11 @@ Claude API call to produce structured compliance decisions per case.
 
 from __future__ import annotations
 
+import time
+
+import anthropic
+
+from config import MAX_TOKENS, MODEL_NAME, TEMPERATURE
 from models import Case, Policy
 
 
@@ -110,3 +115,41 @@ def build_user_message(case: Case, retrieved_policies: list[Policy]) -> str:
             "Issue your decision now.",
         ]
     )
+
+
+def call_anthropic_api(system_prompt: str, user_message: str) -> str:
+    """
+    Execute a single Anthropic Messages API call and return raw text content.
+
+    Retry policy:
+    - Retry exactly once after 1 second only for RateLimitError.
+    - All other Anthropic errors are raised immediately.
+    """
+    client = anthropic.Anthropic()
+
+    def _invoke() -> str:
+        response = client.messages.create(
+            model=MODEL_NAME,
+            max_tokens=MAX_TOKENS,
+            temperature=TEMPERATURE,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_message}],
+        )
+        if not response.content:
+            raise ValueError("Anthropic response contained no content blocks.")
+        return response.content[0].text
+
+    try:
+        return _invoke()
+    except anthropic.RateLimitError:
+        time.sleep(1)
+        return _invoke()
+    except anthropic.AuthenticationError as exc:
+        raise RuntimeError(
+            "Anthropic authentication failed. "
+            "Check ANTHROPIC_API_KEY in your environment/.env."
+        ) from exc
+    except anthropic.APIConnectionError:
+        raise
+    except anthropic.APIError:
+        raise
