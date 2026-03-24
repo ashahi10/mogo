@@ -51,6 +51,12 @@ class Metrics:
     edge_total: int
     retry_attempted_count: int
     avg_confidence: float
+    straight_accuracy: float = 0.0
+    ambiguous_accuracy: float = 0.0
+    edge_accuracy: float = 0.0
+    straight_correct: int = 0
+    ambiguous_correct: int = 0
+    edge_correct: int = 0
 
 
 MODE_FILE_MAP = {
@@ -82,6 +88,10 @@ def compute_metrics(results: list[EvalResult]) -> Metrics:
         sum(row.confidence for row in results) / total if total else 0.0
     )
 
+    straight_correct = sum(1 for row in straightforward if row.got == row.expected)
+    ambiguous_correct = sum(1 for row in ambiguous if row.got == row.expected)
+    edge_correct = sum(1 for row in edge if row.got == row.expected)
+
     return Metrics(
         total=total,
         accuracy=(correct / total) if total else 0.0,
@@ -103,16 +113,21 @@ def compute_metrics(results: list[EvalResult]) -> Metrics:
         edge_total=len(edge),
         retry_attempted_count=retry_attempted_count,
         avg_confidence=avg_confidence,
+        straight_accuracy=(straight_correct / len(straightforward)) if straightforward else 0.0,
+        ambiguous_accuracy=(ambiguous_correct / len(ambiguous)) if ambiguous else 0.0,
+        edge_accuracy=(edge_correct / len(edge)) if edge else 0.0,
+        straight_correct=straight_correct,
+        ambiguous_correct=ambiguous_correct,
+        edge_correct=edge_correct,
     )
 
 
-def _print_report(results: list[EvalResult], metrics: Metrics, runtime_s: float) -> None:
+def _print_report(
+    results: list[EvalResult], metrics: Metrics, runtime_s: float, mode: str = "baseline"
+) -> None:
     """Render evaluation report in required human-readable format."""
     correct = sum(1 for row in results if row.got == row.expected)
-
-    straight_pass = metrics.straight_not_escalated_pct >= 0.85
-    ambiguous_pass = metrics.ambiguous_escalated_pct >= 0.75
-    edge_pass = metrics.edge_escalated_pct >= 1.0
+    use_baseline_tier_metrics = (mode == "baseline")
 
     print("============================================================")
     print("  ORION DECISION AGENT — EVALUATION REPORT")
@@ -129,27 +144,58 @@ def _print_report(results: list[EvalResult], metrics: Metrics, runtime_s: float)
     )
     print()
     print("By difficulty tier:")
-    print(
-        "  Straightforward "
-        f"({metrics.straight_total}) — NOT escalated : "
-        f"{metrics.straight_not_escalated_pct * 100:.1f}%  "
-        f"({metrics.straight_not_escalated_count}/{metrics.straight_total})    "
-        f"{'✓' if straight_pass else '✗'} target ≥ 85%"
-    )
-    print(
-        "  Ambiguous       "
-        f"({metrics.ambiguous_total}) — Escalated     : "
-        f"{metrics.ambiguous_escalated_pct * 100:.1f}% "
-        f"({metrics.ambiguous_escalated_count}/{metrics.ambiguous_total})    "
-        f"{'✓' if ambiguous_pass else '✗'} target ≥ 75%"
-    )
-    print(
-        "  Edge cases      "
-        f"({metrics.edge_total}) — Escalated     : "
-        f"{metrics.edge_escalated_pct * 100:.1f}% "
-        f"({metrics.edge_escalated_count}/{metrics.edge_total})    "
-        f"{'✓' if edge_pass else '✗'} target 100%"
-    )
+
+    if use_baseline_tier_metrics:
+        straight_pass = metrics.straight_not_escalated_pct >= 0.85
+        ambiguous_pass = metrics.ambiguous_escalated_pct >= 0.75
+        edge_pass = metrics.edge_escalated_pct >= 1.0
+        print(
+            "  Straightforward "
+            f"({metrics.straight_total}) — NOT escalated : "
+            f"{metrics.straight_not_escalated_pct * 100:.1f}%  "
+            f"({metrics.straight_not_escalated_count}/{metrics.straight_total})    "
+            f"{'✓' if straight_pass else '✗'} target ≥ 85%"
+        )
+        print(
+            "  Ambiguous       "
+            f"({metrics.ambiguous_total}) — Escalated     : "
+            f"{metrics.ambiguous_escalated_pct * 100:.1f}% "
+            f"({metrics.ambiguous_escalated_count}/{metrics.ambiguous_total})    "
+            f"{'✓' if ambiguous_pass else '✗'} target ≥ 75%"
+        )
+        print(
+            "  Edge cases      "
+            f"({metrics.edge_total}) — Escalated     : "
+            f"{metrics.edge_escalated_pct * 100:.1f}% "
+            f"({metrics.edge_escalated_count}/{metrics.edge_total})    "
+            f"{'✓' if edge_pass else '✗'} target 100%"
+        )
+    else:
+        straight_pass = metrics.straight_accuracy >= 0.85
+        ambiguous_pass = metrics.ambiguous_accuracy >= 0.75
+        edge_pass = metrics.edge_accuracy >= 0.75
+        print(
+            "  Straightforward "
+            f"({metrics.straight_total}) — Accuracy      : "
+            f"{metrics.straight_accuracy * 100:.1f}%  "
+            f"({metrics.straight_correct}/{metrics.straight_total})    "
+            f"{'✓' if straight_pass else '✗'} target ≥ 85%"
+        )
+        print(
+            "  Ambiguous       "
+            f"({metrics.ambiguous_total}) — Accuracy      : "
+            f"{metrics.ambiguous_accuracy * 100:.1f}% "
+            f"({metrics.ambiguous_correct}/{metrics.ambiguous_total})    "
+            f"{'✓' if ambiguous_pass else '✗'} target ≥ 75%"
+        )
+        print(
+            "  Edge cases      "
+            f"({metrics.edge_total}) — Accuracy      : "
+            f"{metrics.edge_accuracy * 100:.1f}% "
+            f"({metrics.edge_correct}/{metrics.edge_total})    "
+            f"{'✓' if edge_pass else '✗'} target ≥ 75%"
+        )
+
     print()
     print("Operational indicators:")
     print(
@@ -257,6 +303,6 @@ if __name__ == "__main__":
 
     metrics = compute_metrics(results)
     runtime_s = time.time() - start
-    _print_report(results, metrics, runtime_s)
+    _print_report(results, metrics, runtime_s, mode=mode)
 
     sys.exit(0 if metrics.accuracy >= 0.70 else 1)

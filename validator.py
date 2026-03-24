@@ -239,6 +239,18 @@ class EscalationChecker:
                 ):
                     reasons.append("Conflicting identity signals detected in case attributes")
 
+            composite_count = sum([
+                getattr(case.attributes, "impossible_travel_flag", None) is True,
+                (getattr(case.attributes, "device_trust_score", None) or 1.0) < 0.4,
+                getattr(case.attributes, "geolocation_mismatch", None) is True,
+                (getattr(case.attributes, "recent_password_reset_hours", None) is not None
+                 and getattr(case.attributes, "recent_password_reset_hours", 999) <= 24),
+            ])
+            if composite_count >= 2:
+                reasons.append(
+                    f"Composite security event: {composite_count} concurrent session-level risk signals detected"
+                )
+
             if not reasons:
                 return output
 
