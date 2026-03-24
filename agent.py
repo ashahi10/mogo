@@ -5,12 +5,14 @@ Claude API call to produce structured compliance decisions per case.
 
 from __future__ import annotations
 
+import json
 import time
 
 import anthropic
 
 from config import MAX_TOKENS, MODEL_NAME, TEMPERATURE
 from models import Case, Policy
+from retriever import PolicyRetriever, build_retrieval_query
 
 
 SYSTEM_PROMPT = """
@@ -153,3 +155,64 @@ def call_anthropic_api(system_prompt: str, user_message: str) -> str:
         raise
     except anthropic.APIError:
         raise
+
+
+class DecisionAgent:
+    """Single-case decision orchestrator for retrieval + LLM decisioning."""
+
+    def __init__(self, retriever: PolicyRetriever):
+        self.retriever = retriever
+
+    def decide(self, case: Case) -> tuple[str, list[Policy]]:
+        """
+        Return raw decision JSON text and retrieved policies.
+
+        The method never raises; errors are converted to safe escalation JSON.
+        """
+        retrieved: list[Policy] = []
+        try:
+            query = build_retrieval_query(case)
+            retrieved = self.retriever.search(query)
+
+            if not retrieved:
+                return (
+                    self._build_escalation_response(
+                        case_id=case.case_id,
+                        reason="Policy retrieval returned no results",
+                        retrieved=[],
+                    ),
+                    [],
+                )
+
+            user_message = build_user_message(case, retrieved)
+            raw_response = call_anthropic_api(SYSTEM_PROMPT, user_message)
+            return raw_response, retrieved
+        except Exception as exc:
+            return (
+                self._build_escalation_response(
+                    case_id=case.case_id,
+                    reason=f"Decision pipeline error: {exc}",
+                    retrieved=retrieved,
+                ),
+                retrieved,
+            )
+
+    def _build_escalation_response(
+        self,
+        case_id: str,
+        reason: str,
+        retrieved: list[Policy],
+    ) -> str:
+        """Build guaranteed-parseable ESCALATE fallback JSON string."""
+        fallback_policy_id = retrieved[0].policy_id if retrieved else "POL-007"
+        payload = {
+            "decision": "ESCALATE",
+            "confidence": 0.0,
+            "policy_citations": [
+                {
+                    "policy_id": fallback_policy_id,
+                    "reason": reason,
+                }
+            ],
+        }
+        return json.dumps(payload)
