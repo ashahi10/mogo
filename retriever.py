@@ -5,9 +5,14 @@ and exposes search_policies() for similarity-based policy lookup.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 import re
 
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
+from config import RETRIEVAL_TOP_K
 from models import Policy
 
 
@@ -68,3 +73,44 @@ def load_policies(path: str) -> list[Policy]:
             raise ValueError(f"Policy block {block_index} failed validation: {exc}") from exc
 
     return policies
+
+
+class PolicyRetriever:
+    """TF-IDF retriever that returns top-k relevant policies for a query."""
+
+    def __init__(self, policies_path: str):
+        self.policies: list[Policy] = load_policies(policies_path)
+        self.vectorizer = TfidfVectorizer(
+            ngram_range=(1, 2),
+            stop_words="english",
+            max_features=500,
+        )
+        corpus = [
+            f"{policy.title} {policy.rule} {policy.escalation_note or ''}"
+            for policy in self.policies
+        ]
+        self.policy_matrix = self.vectorizer.fit_transform(corpus)
+
+    def search(self, query: str, top_k: int = RETRIEVAL_TOP_K) -> list[Policy]:
+        """
+        Return top-k policies sorted by descending cosine similarity.
+
+        On runtime retrieval failure, return an empty list rather than raising.
+        """
+        try:
+            query_vec = self.vectorizer.transform([query])
+            scores = cosine_similarity(query_vec, self.policy_matrix)[0]
+            top_indices = scores.argsort()[::-1][:top_k]
+
+            results: list[Policy] = []
+            for idx in top_indices:
+                score = float(scores[idx])
+                if score <= 0.0:
+                    continue
+                policy_copy = self.policies[idx].model_copy()
+                policy_copy.similarity_score = round(score, 4)
+                results.append(policy_copy)
+            return results
+        except Exception as exc:  # Defensive safety net for retrieval runtime failures.
+            print(f"Retriever search error: {exc}", file=sys.stderr)
+            return []
