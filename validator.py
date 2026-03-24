@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pydantic import ValidationError
 
 from agent import SYSTEM_PROMPT, build_user_message, call_anthropic_api
+from config import CONFIDENCE_THRESHOLD, ESCALATE_ON_MISSING_FIELDS, ESCALATE_ON_RETRIEVAL_FAILURE
 from models import Case, DecisionOutput, Policy
 
 
@@ -183,3 +184,65 @@ def validate_with_retry(
         },
     }
     return DecisionOutput(**fallback_payload)
+
+
+class EscalationChecker:
+    """Apply deterministic post-validation escalation overrides."""
+
+    def check(
+        self,
+        output: DecisionOutput,
+        case: Case,
+        retrieved: list[Policy],
+    ) -> DecisionOutput:
+        """Return possibly overridden DecisionOutput based on safety rules."""
+        try:
+            reasons: list[str] = []
+
+            if output.confidence < CONFIDENCE_THRESHOLD:
+                reasons.append(
+                    f"Confidence {output.confidence:.2f} is below required threshold {CONFIDENCE_THRESHOLD}"
+                )
+
+            if ESCALATE_ON_MISSING_FIELDS and case.attributes.missing_fields:
+                reasons.append(
+                    "Case has missing critical fields: "
+                    + ", ".join(case.attributes.missing_fields)
+                )
+
+            if ESCALATE_ON_RETRIEVAL_FAILURE and not retrieved:
+                reasons.append("No policies were retrieved for this case")
+
+            if case.attributes.identity_verified is True:
+                verified_name = (case.attributes.verified_name or "").strip().lower()
+                holder_name = (case.attributes.account_holder_name or "").strip().lower()
+                if (
+                    (verified_name and holder_name and verified_name != holder_name)
+                    or verified_name == "unknown"
+                    or holder_name == "unknown"
+                ):
+                    reasons.append("Conflicting identity signals detected in case attributes")
+
+            if not reasons:
+                return output
+
+            if output.decision == "ESCALATE":
+                if output.audit_log.error_detail is None:
+                    return output.model_copy(
+                        update={
+                            "audit_log": output.audit_log.model_copy(
+                                update={"error_detail": "Escalation reasons noted: " + "; ".join(reasons)}
+                            )
+                        }
+                    )
+                return output
+
+            detail = "Escalation override applied. Reasons: " + "; ".join(reasons)
+            return output.model_copy(
+                update={
+                    "decision": "ESCALATE",
+                    "audit_log": output.audit_log.model_copy(update={"error_detail": detail}),
+                }
+            )
+        except Exception:
+            return output
