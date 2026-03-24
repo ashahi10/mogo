@@ -13,7 +13,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from config import RETRIEVAL_TOP_K
-from models import Policy
+from models import Case, Policy
 
 
 FIELD_LABEL_RE = re.compile(r"(?im)^(policy_id|title|rule|escalation_note):\s*$")
@@ -114,3 +114,65 @@ class PolicyRetriever:
         except Exception as exc:  # Defensive safety net for retrieval runtime failures.
             print(f"Retriever search error: {exc}", file=sys.stderr)
             return []
+
+
+def build_retrieval_query(case: Case) -> str:
+    """
+    Build an enriched retrieval query from case summary + structured attributes.
+
+    Enrichment improves lexical overlap with policy text for TF-IDF retrieval.
+    """
+    parts: list[str] = [case.summary]
+    attrs = case.attributes
+
+    try:
+        if attrs.high_risk_flag is True:
+            parts.append("high risk flagged account")
+    except Exception:
+        pass
+
+    try:
+        if attrs.missing_fields:
+            parts.append(f"missing fields: {', '.join(attrs.missing_fields)}")
+    except Exception:
+        pass
+
+    try:
+        if attrs.identity_verified is False:
+            parts.append("identity not verified unverified account")
+    except Exception:
+        pass
+
+    try:
+        if attrs.identity_verified is None:
+            parts.append("identity verification status unknown missing")
+    except Exception:
+        pass
+
+    try:
+        verified_name = (attrs.verified_name or "").strip().lower()
+        holder_name = (attrs.account_holder_name or "").strip().lower()
+        if verified_name and holder_name and verified_name != holder_name:
+            parts.append("name mismatch identity discrepancy account holder mismatch")
+    except Exception:
+        pass
+
+    try:
+        if attrs.recent_profile_changes is not None and attrs.recent_profile_changes >= 2:
+            parts.append("multiple recent profile changes velocity suspicious activity")
+    except Exception:
+        pass
+
+    try:
+        if attrs.payout_amount is not None and attrs.payout_amount > 5000:
+            parts.append("large payout high value transaction threshold")
+    except Exception:
+        pass
+
+    try:
+        if attrs.account_age_days is not None and attrs.account_age_days < 60:
+            parts.append("new account age restriction recently opened")
+    except Exception:
+        pass
+
+    return " ".join(parts)
