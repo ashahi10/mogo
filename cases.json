@@ -241,11 +241,11 @@
       "payout_amount": 620.0,
       "identity_verified": true,
       "verified_name": "Sarah Chen",
-      "account_holder_name": "UNKNOWN",
+      "account_holder_name": null,
       "recent_profile_changes": 1,
       "high_risk_flag": false,
       "account_age_days": 130,
-      "missing_fields": [],
+      "missing_fields": ["account_holder_name"],
       "transaction_velocity": 2
     },
     "expected_decision": "ESCALATE",

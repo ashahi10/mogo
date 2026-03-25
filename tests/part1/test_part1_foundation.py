@@ -58,6 +58,9 @@ def test_decision_output_rejects_invalid_shapes() -> None:
     with pytest.raises(ValidationError):
         DecisionOutput(**{**base, "explanation": "unexpected"})
 
+    serialized = DecisionOutput(**base).model_dump()
+    assert "case_id" not in serialized
+
 
 def test_cases_dataset_distribution_and_schema_are_valid() -> None:
     """cases.json should have 14 valid cases with the required distribution."""

@@ -45,6 +45,7 @@ def test_decide_escalates_when_retriever_returns_empty_list(monkeypatch):
 
     parsed = json.loads(raw)
     assert parsed["decision"] == "ESCALATE"
+    assert parsed["policy_citations"] == []
     assert retrieved == []
     assert called["api"] == 0
 

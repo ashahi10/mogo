@@ -3,7 +3,7 @@
 import re
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from config import MIN_POLICY_CITATIONS
 
@@ -195,7 +195,7 @@ class DecisionOutput(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=False)
 
-    case_id: str
+    case_id: str = Field(exclude=True)
     decision: Literal["APPROVE", "DENY", "ESCALATE"]
     confidence: float
     policy_citations: list[PolicyCitation]
@@ -218,8 +218,23 @@ class DecisionOutput(BaseModel):
     @field_validator("policy_citations")
     @classmethod
     def must_have_citations(cls, value: list[PolicyCitation]) -> list[PolicyCitation]:
-        if len(value) < MIN_POLICY_CITATIONS:
-            raise ValueError(
-                f"At least {MIN_POLICY_CITATIONS} policy citation(s) are required"
-            )
         return value
+
+    @model_validator(mode="after")
+    def citation_requirements(self) -> "DecisionOutput":
+        """
+        Require citations for normal outputs, but allow empty citations for
+        system-generated fallback escalations with no retrieved policies.
+        """
+        if len(self.policy_citations) >= MIN_POLICY_CITATIONS:
+            return self
+
+        is_system_fallback = (
+            self.decision == "ESCALATE"
+            and self.confidence == 0.0
+            and len(self.audit_log.retrieved_policies) == 0
+        )
+        if is_system_fallback:
+            return self
+
+        raise ValueError(f"At least {MIN_POLICY_CITATIONS} policy citation(s) are required")

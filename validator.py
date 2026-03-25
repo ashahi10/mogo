@@ -177,17 +177,21 @@ def validate_with_retry(
     except Exception as exc:
         second_error = f"Retry call failed: {exc}"
 
-    fallback_policy_id = retrieved[0].policy_id if retrieved else "POL-007"
+    fallback_citations = (
+        [
+            {
+                "policy_id": retrieved[0].policy_id,
+                "reason": "Automatic escalation: output validation failed after retry",
+            }
+        ]
+        if retrieved
+        else []
+    )
     fallback_payload = {
         "case_id": case_id,
         "decision": "ESCALATE",
         "confidence": 0.0,
-        "policy_citations": [
-            {
-                "policy_id": fallback_policy_id,
-                "reason": "Automatic escalation: output validation failed after retry",
-            }
-        ],
+        "policy_citations": fallback_citations,
         "audit_log": {
             "retrieved_policies": [policy.policy_id for policy in retrieved],
             "retrieval_score": float(
@@ -259,6 +263,7 @@ class EscalationChecker:
             return output.model_copy(
                 update={
                     "decision": "ESCALATE",
+                    "confidence": min(output.confidence, CONFIDENCE_THRESHOLD - 0.01),
                     "audit_log": output.audit_log.model_copy(update={"error_detail": detail}),
                 }
             )
@@ -388,12 +393,7 @@ def run_pipeline(case: Case, agent: DecisionAgent) -> DecisionOutput:
             "case_id": case.case_id,
             "decision": "ESCALATE",
             "confidence": 0.0,
-            "policy_citations": [
-                {
-                    "policy_id": "POL-007",
-                    "reason": "Automatic escalation: pipeline runtime failure",
-                }
-            ],
+            "policy_citations": [],
             "audit_log": {
                 "retrieved_policies": [],
                 "retrieval_score": 0.0,

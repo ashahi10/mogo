@@ -67,6 +67,45 @@ def test_validate_with_retry_escalates_after_two_failures(monkeypatch):
     assert output.audit_log.retry_attempted is True
 
 
+def test_validate_with_retry_allows_empty_citations_on_system_fallback():
+    """Fallback escalation should allow empty citations when no policies were retrieved."""
+    stub_agent = SimpleNamespace(
+        invoke_model=lambda _sp, _um: '{"bad":"json"}',
+    )
+    output = validator.validate_with_retry(
+        '{"broken json', "CASE-001", [], stub_agent, _sample_case()
+    )
+    assert output.decision == "ESCALATE"
+    assert output.confidence == 0.0
+    assert output.policy_citations == []
+
+
+def test_escalation_checker_caps_confidence_on_override():
+    """Escalation overrides should cap confidence below threshold for semantic consistency."""
+    output = DecisionOutput(
+        case_id="CASE-001",
+        decision="DENY",
+        confidence=0.92,
+        policy_citations=[{"policy_id": "POL-001", "reason": "ok"}],
+        audit_log={
+            "retrieved_policies": ["POL-001"],
+            "retrieval_score": 0.7,
+            "timestamp": "2026-01-01T00:00:00Z",
+            "retry_attempted": False,
+        },
+    )
+    case_with_missing = _sample_case().model_copy(
+        update={
+            "attributes": _sample_case().attributes.model_copy(
+                update={"missing_fields": ["identity_verified"]}
+            )
+        }
+    )
+    checked = validator.EscalationChecker().check(output, case_with_missing, _retrieved())
+    assert checked.decision == "ESCALATE"
+    assert checked.confidence < 0.65
+
+
 def test_case_011_clear_mismatch_deny_is_not_forced_to_escalate():
     """EscalationChecker should not auto-escalate a clear mismatch deny case from policy POL-002."""
     case_011 = _sample_case("CASE-011")

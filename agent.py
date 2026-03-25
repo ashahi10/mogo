@@ -226,16 +226,15 @@ class DecisionAgent:
         retrieved: list[Policy],
     ) -> str:
         """Build guaranteed-parseable ESCALATE fallback JSON string."""
-        fallback_policy_id = retrieved[0].policy_id if retrieved else "POL-007"
+        citations = (
+            [{"policy_id": retrieved[0].policy_id, "reason": reason}]
+            if retrieved
+            else []
+        )
         payload = {
             "decision": "ESCALATE",
             "confidence": 0.0,
-            "policy_citations": [
-                {
-                    "policy_id": fallback_policy_id,
-                    "reason": reason,
-                }
-            ],
+            "policy_citations": citations,
         }
         return json.dumps(payload)
 

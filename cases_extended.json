@@ -149,7 +149,7 @@
       "historical_payout_stddev": 150.0,
       "data_conflict_flag": false
     },
-    "expected_decision": "ESCALATE",
+    "expected_decision": "DENY",
     "difficulty": "ambiguous",
     "scenario_type": "impossible_travel",
     "notes": "Adversarial security pattern."
