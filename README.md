@@ -42,10 +42,10 @@ pip install -r requirements.txt
 1. Configure environment variables
 
 ```bash
-cp .env.example .env
+cp .env
 ```
 
-`.env.example` contents:
+`.env` contents:
 
 ```env
 ANTHROPIC_API_KEY=your_key_here
@@ -199,7 +199,7 @@ python3 agent.py
 pytest tests/ -v
 ```
 
-No API calls in tests (Anthropic usage is mocked). Latest run: **27 passed**.
+No API calls in tests (Anthropic usage is mocked). Latest run: **29 passed**.
 
 ## Project structure
 
