@@ -14,9 +14,13 @@ import time
 
 from agent import DecisionAgent
 from config import CASES_FILE, POLICIES_FILE
-from models import Case
+from models import Case, DecisionOutput
 from retriever import PolicyRetriever
-from validator import run_pipeline
+from validator import (
+    compute_guardrail_indicators,
+    confidence_calibration_snapshot,
+    run_pipeline,
+)
 
 
 @dataclass
@@ -217,8 +221,37 @@ def _print_report(
     print(f"Runtime: {runtime_s:.2f}s")
 
 
-def _resolve_mode() -> str:
-    """Resolve evaluation mode from CLI and environment."""
+def _print_guardrails_section(
+    outputs: list[DecisionOutput], cases: list[Case]
+) -> None:
+    """Print validation guardrail indicators and confidence calibration snapshot."""
+    indicators = compute_guardrail_indicators(outputs, cases)
+    expected_by_id = {case.case_id: case.expected_decision for case in cases}
+    snapshot = confidence_calibration_snapshot(outputs, expected_by_id)
+
+    print()
+    print("------------------------------------------------------------")
+    print("  Guardrail & calibration (observability)")
+    print("------------------------------------------------------------")
+    print(f"  Outputs analyzed     : {indicators.total_outputs}")
+    print(
+        f"  Citation drift       : {indicators.citation_drift_count} "
+        f"({indicators.citation_drift_rate * 100:.1f}% of outputs, severity: {indicators.citation_drift_severity})"
+    )
+    print(f"  Input contradiction flags (case attrs) : {indicators.contradiction_flag_count}")
+    print()
+    print("  Confidence buckets (model output vs expected label accuracy):")
+    for bucket, stats in snapshot.items():
+        acc = stats.get("accuracy")
+        acc_s = f", label accuracy {acc * 100:.1f}%" if acc is not None else ""
+        print(
+            f"    {bucket}: n={int(stats['count'])}, "
+            f"avg_confidence={stats['avg_confidence']:.3f}{acc_s}"
+        )
+
+
+def _parse_eval_args() -> tuple[str, bool]:
+    """Resolve evaluation mode, optional guardrails report, from CLI and environment."""
     parser = argparse.ArgumentParser(
         description="Run Orion evaluation in baseline or extended mode."
     )
@@ -227,21 +260,30 @@ def _resolve_mode() -> str:
         choices=("baseline", "extended"),
         help="Evaluation mode (overrides EVAL_MODE if set).",
     )
+    parser.add_argument(
+        "--guardrails",
+        action="store_true",
+        help="After metrics, print citation-drift indicators and confidence calibration.",
+    )
     args = parser.parse_args()
 
     env_mode = os.environ.get("EVAL_MODE", "").strip().lower()
     if args.mode:
-        return args.mode
-    if env_mode in MODE_FILE_MAP:
-        return env_mode
-    return "baseline"
+        mode = args.mode
+    elif env_mode in MODE_FILE_MAP:
+        mode = env_mode
+    else:
+        mode = "baseline"
+    return mode, args.guardrails
 
 
 if __name__ == "__main__":
     start = time.time()
     results: list[EvalResult] = []
+    guardrail_outputs: list[DecisionOutput] = []
+    guardrail_cases: list[Case] = []
 
-    mode = _resolve_mode()
+    mode, show_guardrails = _parse_eval_args()
     file_config = MODE_FILE_MAP[mode]
     cases_file = file_config["cases_file"]
     policies_file = file_config["policies_file"]
@@ -284,6 +326,9 @@ if __name__ == "__main__":
             got = decision.decision
             confidence = decision.confidence
             retry_attempted = decision.audit_log.retry_attempted
+            if show_guardrails:
+                guardrail_outputs.append(decision)
+                guardrail_cases.append(case)
         except Exception as exc:
             print(f"Error while processing {raw_case_id}: {exc}", file=sys.stderr)
             got = "ESCALATE"
@@ -304,5 +349,8 @@ if __name__ == "__main__":
     metrics = compute_metrics(results)
     runtime_s = time.time() - start
     _print_report(results, metrics, runtime_s, mode=mode)
+
+    if show_guardrails and guardrail_outputs:
+        _print_guardrails_section(guardrail_outputs, guardrail_cases)
 
     sys.exit(0 if metrics.accuracy >= 0.70 else 1)

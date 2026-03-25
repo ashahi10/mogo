@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import json
+from types import SimpleNamespace
 
 import validator
 from models import Case, DecisionOutput, Policy
@@ -56,8 +57,12 @@ def test_escalation_checker_overrides_low_confidence():
 
 def test_validate_with_retry_escalates_after_two_failures(monkeypatch):
     """validate_with_retry should return fallback ESCALATE output when both attempts fail."""
-    monkeypatch.setattr(validator, "call_anthropic_api", lambda *args, **kwargs: '{"bad":"json"}')
-    output = validator.validate_with_retry('{"broken json', "CASE-001", _retrieved(), object(), _sample_case())
+    stub_agent = SimpleNamespace(
+        invoke_model=lambda _sp, _um: '{"bad":"json"}',
+    )
+    output = validator.validate_with_retry(
+        '{"broken json', "CASE-001", _retrieved(), stub_agent, _sample_case()
+    )
     assert output.decision == "ESCALATE"
     assert output.audit_log.retry_attempted is True
 

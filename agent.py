@@ -176,6 +176,15 @@ class DecisionAgent:
     def __init__(self, retriever: PolicyRetriever):
         self.retriever = retriever
 
+    def invoke_model(self, system_prompt: str, user_message: str) -> str:
+        """
+        Single entry point for Anthropic completion calls from this agent.
+
+        Used by the primary decision path and by the validator retry path so
+        rate-limit and error behavior stay centralized in call_anthropic_api.
+        """
+        return call_anthropic_api(system_prompt, user_message)
+
     def decide(self, case: Case) -> tuple[str, list[Policy]]:
         """
         Return raw decision JSON text and retrieved policies.
@@ -198,7 +207,7 @@ class DecisionAgent:
                 )
 
             user_message = build_user_message(case, retrieved)
-            raw_response = call_anthropic_api(SYSTEM_PROMPT, user_message)
+            raw_response = self.invoke_model(SYSTEM_PROMPT, user_message)
             return raw_response, retrieved
         except Exception as exc:
             return (

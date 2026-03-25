@@ -126,123 +126,82 @@ def build_retrieval_query(case: Case) -> str:
     parts: list[str] = [case.summary]
     attrs = case.attributes
 
-    try:
-        if attrs.high_risk_flag is True:
-            parts.append("high risk flagged account")
-    except Exception:
-        pass
+    if attrs.high_risk_flag is True:
+        parts.append("high risk flagged account")
 
-    try:
-        if attrs.missing_fields:
-            parts.append(f"missing fields: {', '.join(attrs.missing_fields)}")
-    except Exception:
-        pass
+    if attrs.missing_fields:
+        parts.append(f"missing fields: {', '.join(attrs.missing_fields)}")
 
-    try:
-        if attrs.identity_verified is False:
-            parts.append("identity not verified unverified account")
-    except Exception:
-        pass
+    if attrs.identity_verified is False:
+        parts.append("identity not verified unverified account")
 
-    try:
-        if attrs.identity_verified is None:
-            parts.append("identity verification status unknown missing")
-    except Exception:
-        pass
+    if attrs.identity_verified is None:
+        parts.append("identity verification status unknown missing")
 
-    try:
-        verified_name = (attrs.verified_name or "").strip().lower()
-        holder_name = (attrs.account_holder_name or "").strip().lower()
-        if verified_name and holder_name and verified_name != holder_name:
-            parts.append("name mismatch identity discrepancy account holder mismatch")
-    except Exception:
-        pass
+    verified_name = (attrs.verified_name or "").strip().lower()
+    holder_name = (attrs.account_holder_name or "").strip().lower()
+    if verified_name and holder_name and verified_name != holder_name:
+        parts.append("name mismatch identity discrepancy account holder mismatch")
 
-    try:
-        if attrs.recent_profile_changes is not None and attrs.recent_profile_changes >= 2:
-            parts.append("multiple recent profile changes velocity suspicious activity")
-    except Exception:
-        pass
+    if attrs.recent_profile_changes is not None and attrs.recent_profile_changes >= 2:
+        parts.append("multiple recent profile changes velocity suspicious activity")
 
-    try:
-        if attrs.payout_amount is not None and attrs.payout_amount > 5000:
-            parts.append("large payout high value transaction threshold")
-    except Exception:
-        pass
+    if attrs.payout_amount is not None and attrs.payout_amount > 5000:
+        parts.append("large payout high value transaction threshold")
 
-    try:
-        if attrs.account_age_days is not None and attrs.account_age_days < 60:
-            parts.append("new account age restriction recently opened")
-    except Exception:
-        pass
+    if attrs.account_age_days is not None and attrs.account_age_days < 60:
+        parts.append("new account age restriction recently opened")
 
-    try:
-        if attrs.impossible_travel_flag is True:
-            parts.append("impossible travel geolocation anomaly")
-    except Exception:
-        pass
+    if attrs.impossible_travel_flag is True:
+        parts.append("impossible travel geolocation anomaly")
 
-    try:
-        if attrs.geolocation_mismatch is True:
-            parts.append("geolocation mismatch unusual location")
-    except Exception:
-        pass
+    if attrs.geolocation_mismatch is True:
+        parts.append("geolocation mismatch unusual location")
 
-    try:
-        if attrs.device_trust_score is not None and attrs.device_trust_score < 0.4:
-            parts.append("low device trust unfamiliar device")
-    except Exception:
-        pass
+    if attrs.device_trust_score is not None and attrs.device_trust_score < 0.4:
+        parts.append("low device trust unfamiliar device")
 
-    try:
-        if (
-            attrs.recent_password_reset_hours is not None
-            and attrs.recent_password_reset_hours <= 24
-        ):
-            parts.append("recent password reset account security event")
-    except Exception:
-        pass
+    if (
+        attrs.recent_password_reset_hours is not None
+        and attrs.recent_password_reset_hours <= 24
+    ):
+        parts.append("recent password reset account security event")
 
-    try:
-        if attrs.payout_destination_recently_changed is True:
-            parts.append("recent payout destination change beneficiary update")
-    except Exception:
-        pass
+    if attrs.payout_destination_recently_changed is True:
+        parts.append("recent payout destination change beneficiary update")
 
-    try:
-        if attrs.kyc_age_days is not None and attrs.kyc_age_days > 365:
-            parts.append("stale kyc profile reverification required")
-    except Exception:
-        pass
+    if attrs.kyc_age_days is not None and attrs.kyc_age_days > 365:
+        parts.append("stale kyc profile reverification required")
 
-    try:
-        if attrs.kyc_confidence is not None and attrs.kyc_confidence < 0.6:
-            parts.append("low confidence kyc verification")
-    except Exception:
-        pass
+    if attrs.kyc_confidence is not None and attrs.kyc_confidence < 0.6:
+        parts.append("low confidence kyc verification")
 
-    try:
-        if attrs.sanctions_watchlist_hit is True:
-            parts.append("watchlist hit sanctions screening escalation")
-    except Exception:
-        pass
+    if attrs.sanctions_watchlist_hit is True:
+        parts.append("watchlist hit sanctions screening escalation")
 
-    try:
-        if attrs.data_conflict_flag is True:
-            parts.append("conflicting data source disagreement")
-    except Exception:
-        pass
+    if attrs.data_conflict_flag is True:
+        parts.append("conflicting data source disagreement")
 
-    try:
-        if (
-            attrs.historical_avg_payout is not None
-            and attrs.payout_amount is not None
-            and attrs.historical_avg_payout > 0
-            and attrs.payout_amount > attrs.historical_avg_payout * 3
-        ):
-            parts.append("payout pattern drift amount anomaly")
-    except Exception:
-        pass
+    if (
+        attrs.historical_avg_payout is not None
+        and attrs.payout_amount is not None
+        and attrs.historical_avg_payout > 0
+        and attrs.payout_amount > attrs.historical_avg_payout * 3
+    ):
+        parts.append("payout pattern drift amount anomaly")
+
+    session_level_hits = sum([
+        attrs.impossible_travel_flag is True,
+        attrs.geolocation_mismatch is True,
+        attrs.device_trust_score is not None and attrs.device_trust_score < 0.4,
+        attrs.recent_password_reset_hours is not None
+        and attrs.recent_password_reset_hours <= 24,
+    ])
+    if session_level_hits >= 2:
+        parts.append(
+            "composite security event POL-019 concurrent session anomalies "
+            "escalate manual review precedence over single-signal deny"
+        )
 
     return " ".join(parts)
 
@@ -277,7 +236,10 @@ def validate_setup(policies_path: str, cases_path: str) -> None:
             f"Setup validation failed: expected at least 10 cases, found {len(cases_data)}."
         )
 
-    print(f"Setup validated: {len(policies)} policies, {len(cases_data)} cases loaded.")
+    print(
+        f"Setup validated: {len(policies)} policies, {len(cases_data)} cases loaded.",
+        file=sys.stderr,
+    )
 
 
 if __name__ == "__main__":

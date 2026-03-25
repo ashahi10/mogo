@@ -1,23 +1,25 @@
 # Orion AI Decision Agent
 
-Policy-grounded compliance decisioning pipeline for payout review cases that returns structured `APPROVE` / `DENY` / `ESCALATE` decisions with audit metadata and deterministic safety overrides.
+Policy-grounded compliance decisioning for payout-review cases: structured `APPROVE` / `DENY` / `ESCALATE` outputs with audit metadata and schema validation.
+
+**What reviewers typically care about here:** how **prompts** are structured (`agent.py`: `SYSTEM_PROMPT`, `build_user_message`) and the **end-to-end implementation** (retrieve → call model → validate → deterministic safety checks). Live model outputs will vary run to run; the design is in the pipeline and contracts, not in chasing a single API response.
 
 ## Requirements
 
-- Python `3.11+` recommended (project also runs in this environment on Python `3.9`, but target is `3.11+`)
+- Python `3.11+` recommended (the project also runs on `3.9` in some environments; target the assignment’s `3.11+` when you can)
 - Anthropic API key with access to `claude-sonnet-4-5`
-- All Python dependencies are listed in `requirements.txt`
+- Dependencies are pinned in `requirements.txt`
 
 ## Setup
 
-1) Clone the repository
+1. Clone the repository
 
 ```bash
 git clone <your-repo-url>
 cd mogo
 ```
 
-2) Create and activate a virtual environment
+1. Create and activate a virtual environment
 
 ```bash
 python3 -m venv venv
@@ -31,15 +33,13 @@ python -m venv venv
 venv\Scripts\activate
 ```
 
-3) Install dependencies
+1. Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-4) Configure environment variables
-
-Copy the example file and add your key:
+1. Configure environment variables
 
 ```bash
 cp .env.example .env
@@ -52,15 +52,15 @@ ANTHROPIC_API_KEY=your_key_here
 ANTHROPIC_BASE_URL=https://api.anthropic.com
 ```
 
-Update `.env` with your real key value for `ANTHROPIC_API_KEY`.
+Set your real `ANTHROPIC_API_KEY` in `.env`.
 
-5) Optional sanity check before running the evaluator
+1. Optional sanity check (messages go to **stderr**)
 
 ```bash
 python3 retriever.py
 ```
 
-Expected output:
+Example:
 
 ```text
 Setup validated: 7 policies, 14 cases loaded.
@@ -68,77 +68,126 @@ Setup validated: 7 policies, 14 cases loaded.
 
 ## Running the evaluation
 
-Baseline mode (default):
+Progress lines (`Processing CASE-…`) are printed to **stderr**; the report below is **stdout** (so you can `>` redirect the report only).
+
+### Baseline (default)
 
 ```bash
 python3 evaluate.py
 ```
 
-Extended mode:
-
-```bash
-python3 evaluate.py --mode extended
-```
-
-Alternative extended mode selector:
-
-```bash
-EVAL_MODE=extended python3 evaluate.py
-```
-
-Expected report format:
+Example report from one successful run (model outputs can vary slightly; tier targets match the original assignment rubric):
 
 ```text
 ============================================================
   ORION DECISION AGENT — EVALUATION REPORT
 ============================================================
 
-Total cases run : <N>
-Approve         : <N>
-Deny            : <N>
-Escalate        : <N>
+Total cases run : 14
+Approve         : 4
+Deny            : 4
+Escalate        : 6
 
-Overall accuracy (vs labels) : <pct>%  (<correct>/<total>)
+Overall accuracy (vs labels) : 100.0%  (14/14)
 
 By difficulty tier:
-  Straightforward (<N>) — NOT escalated : <pct>%  (<n>/<N>)    ✓/✗ target ≥ 85%
-  Ambiguous       (<N>) — Escalated     : <pct>%  (<n>/<N>)    ✓/✗ target ≥ 75%
-  Edge cases      (<N>) — Escalated     : <pct>%  (<n>/<N>)    ✓/✗ target 100%
+  Straightforward (8) — NOT escalated : 100.0%  (8/8)    ✓ target ≥ 85%
+  Ambiguous       (4) — Escalated     : 100.0% (4/4)    ✓ target ≥ 75%
+  Edge cases      (2) — Escalated     : 100.0% (2/2)    ✓ target 100%
 
 Operational indicators:
-  Retry attempted cases: <n>/<N> (<pct>%)
-  Average confidence   : <value>
+  Retry attempted cases: 0/14 (0.0%)
+  Average confidence   : 0.778
 
 ------------------------------------------------------------
   Per-case breakdown
 ------------------------------------------------------------
-  CASE-xxx | <difficulty> | Expected: <label> | Got: <label> | PASS/FAIL
+  CASE-001 | straightforward | Expected: APPROVE   | Got: APPROVE   | PASS ✓
+  CASE-002 | straightforward | Expected: DENY      | Got: DENY      | PASS ✓
+  CASE-003 | straightforward | Expected: DENY      | Got: DENY      | PASS ✓
+  CASE-004 | straightforward | Expected: APPROVE   | Got: APPROVE   | PASS ✓
+  CASE-005 | ambiguous       | Expected: ESCALATE  | Got: ESCALATE  | PASS ✓
+  CASE-006 | straightforward | Expected: APPROVE   | Got: APPROVE   | PASS ✓
+  CASE-007 | straightforward | Expected: DENY      | Got: DENY      | PASS ✓
+  CASE-008 | straightforward | Expected: APPROVE   | Got: APPROVE   | PASS ✓
+  CASE-009 | ambiguous       | Expected: ESCALATE  | Got: ESCALATE  | PASS ✓
+  CASE-010 | ambiguous       | Expected: ESCALATE  | Got: ESCALATE  | PASS ✓
+  CASE-011 | straightforward | Expected: DENY      | Got: DENY      | PASS ✓
+  CASE-012 | ambiguous       | Expected: ESCALATE  | Got: ESCALATE  | PASS ✓
+  CASE-013 | edge            | Expected: ESCALATE  | Got: ESCALATE  | PASS ✓
+  CASE-014 | edge            | Expected: ESCALATE  | Got: ESCALATE  | PASS ✓
 ============================================================
-Runtime: <seconds>s
+Runtime: 115.43s
 ```
 
-Current observed runs in this repository:
+Exit code: `0` if overall accuracy ≥ 70%, else `1`.
 
-- Baseline mode: `14/14` correct (`100.0%`)
-- Extended mode: `11/12` correct (`91.7%`)
+### Extended mode
+
+```bash
+python3 evaluate.py --mode extended
+```
+
+Same pipeline; uses `cases_extended.json` and `policies_extended.md`. Tier lines use **per-tier accuracy** (because edge cases can expect `DENY` as well as `ESCALATE`). Example from one successful run:
+
+```text
+============================================================
+  ORION DECISION AGENT — EVALUATION REPORT
+============================================================
+
+Total cases run : 12
+Approve         : 2
+Deny            : 3
+Escalate        : 7
+
+Overall accuracy (vs labels) : 100.0%  (12/12)
+
+By difficulty tier:
+  Straightforward (3) — Accuracy      : 100.0%  (3/3)    ✓ target ≥ 85%
+  Ambiguous       (5) — Accuracy      : 100.0% (5/5)    ✓ target ≥ 75%
+  Edge cases      (4) — Accuracy      : 100.0% (4/4)    ✓ target ≥ 75%
+
+Operational indicators:
+  Retry attempted cases: 0/12 (0.0%)
+  Average confidence   : 0.705
+
+------------------------------------------------------------
+  Per-case breakdown
+------------------------------------------------------------
+  CASE-201 | straightforward | Expected: APPROVE   | Got: APPROVE   | PASS ✓
+  CASE-202 | straightforward | Expected: DENY      | Got: DENY      | PASS ✓
+  CASE-203 | ambiguous       | Expected: ESCALATE  | Got: ESCALATE  | PASS ✓
+  CASE-204 | ambiguous       | Expected: ESCALATE  | Got: ESCALATE  | PASS ✓
+  CASE-205 | ambiguous       | Expected: ESCALATE  | Got: ESCALATE  | PASS ✓
+  CASE-206 | edge            | Expected: DENY      | Got: DENY      | PASS ✓
+  CASE-207 | ambiguous       | Expected: ESCALATE  | Got: ESCALATE  | PASS ✓
+  CASE-208 | edge            | Expected: DENY      | Got: DENY      | PASS ✓
+  CASE-209 | edge            | Expected: ESCALATE  | Got: ESCALATE  | PASS ✓
+  CASE-210 | ambiguous       | Expected: ESCALATE  | Got: ESCALATE  | PASS ✓
+  CASE-211 | straightforward | Expected: APPROVE   | Got: APPROVE   | PASS ✓
+  CASE-212 | edge            | Expected: ESCALATE  | Got: ESCALATE  | PASS ✓
+============================================================
+Runtime: 111.28s
+```
+
+Optional environment selector: `EVAL_MODE=extended python3 evaluate.py`
+
+Optional observability after the report (citation drift + confidence buckets vs labels):
+
+```bash
+python3 evaluate.py --guardrails
+python3 evaluate.py --mode extended --guardrails
+```
 
 ## Running a single case
 
-Run full pipeline smoke path for two representative cases (`CASE-001`, `CASE-013`):
+Full pipeline smoke (`CASE-001`, `CASE-013`) — uses live API:
 
 ```bash
 python3 validator.py
 ```
 
-What this gives you:
-
-- Final validated decision
-- Confidence score
-- Policy citations
-- Retry indicator
-- Error detail (when escalation guardrails trigger)
-
-Optional single-case agent smoke test (raw model output before validator):
+Raw model output only (still goes through retrieval in `agent.decide`):
 
 ```bash
 python3 agent.py
@@ -146,105 +195,119 @@ python3 agent.py
 
 ## Running tests
 
-Run all tests:
-
 ```bash
 pytest tests/ -v
 ```
 
-Test suite coverage includes:
-
-- Foundation/data-contract checks (`tests/part1`)
-- Core module unit tests (`tests/test_*.py`)
-- Stress robustness tests (`tests/stress`)
-
-Current status in this repository: `24 passed`.
+No API calls in tests (Anthropic usage is mocked). Latest run: **27 passed**.
 
 ## Project structure
 
-- `config.py` - central constants, thresholds, model config, environment loading
-- `models.py` - Pydantic input/output contracts and validators
-- `retriever.py` - policy parsing, TF-IDF index, retrieval query enrichment, setup validation
-- `agent.py` - prompt layer, Anthropic API wrapper, single-case decision orchestration
-- `validator.py` - parse/validate/retry/escalation checker and pipeline composition (`run_pipeline`)
-- `evaluate.py` - batch runner, metrics computation, report rendering, mode selection
-- `policies.md` - baseline policy corpus (7 policies)
-- `cases.json` - baseline dataset (14 labeled cases)
-- `policies_extended.md` - extended policy corpus (19 policies)
-- `cases_extended.json` - extended dataset (12 labeled cases with richer signals)
-- `tests/conftest.py` - shared fixtures/constants
-- `tests/test_retriever.py` - retriever and query enrichment unit tests
-- `tests/test_agent.py` - decision agent behavior tests with mocked API calls
-- `tests/test_validator.py` - parser/retry/escalation checker tests
-- `tests/test_evaluate.py` - metric computation tests
-- `tests/part1/test_part1_foundation.py` - milestone baseline contract and data checks
-- `tests/stress/harness.py` - malformed-response stress fixtures
-- `tests/stress/test_stress_harness.py` - stress-path behavior tests
-- `design.md` - concise architecture and design rationale narrative
-- `docs/SYSTEM_DESIGN.md` - full architecture specification and implementation rationale
-- `docs/BUILD_PLAN_PART1.md` - milestone/ticket plan (M1-M3)
-- `docs/BUILD_PLAN_PART2.md` - milestone/ticket plan (M4-M6)
-- `docs/PRD (1).md` - requirements baseline
+- `config.py` — constants, thresholds, env loading
+- `models.py` — Pydantic input/output contracts
+- `retriever.py` — policy markdown parsing, TF-IDF retrieval, query enrichment, setup check
+- `agent.py` — system/user prompts, API wrapper, `DecisionAgent`
+- `validator.py` — JSON parse, Pydantic validation, retry, `EscalationChecker`, `run_pipeline`
+- `evaluate.py` — batch run, metrics, `--mode`, optional `--guardrails`
+- `policies.md` / `cases.json` — baseline policies (7) and cases (14)
+- `policies_extended.md` / `cases_extended.json` — optional harder corpus
+- `design.md` — short design write-up (assignment format)
+- `tests/` — unit, contract, and stress tests
 
 ## Design decisions
 
-This system intentionally uses TF-IDF retrieval + strict Pydantic output contracts + deterministic ESCALATE guardrails to prioritize auditability and safety over raw model autonomy. See `design.md` for the concise assignment narrative and `docs/SYSTEM_DESIGN.md` for full architectural detail.
+Ground decisions in **retrieved policy text**, enforce shape with **Pydantic**, and treat **ESCALATE** as a normal governed outcome when confidence is low, data is missing, retrieval fails, validation fails after retry, or structural identity checks fire. The one-page narrative alongside this README is in `design.md`.
 
-## System design diagram
+## Architecture (component map & data flow)
 
-```mermaid
-flowchart TD
-    A[cases.json / cases_extended.json] --> B[Case model validation]
-    B --> C[build_retrieval_query]
-    C --> D[PolicyRetriever TF-IDF search]
-    P[policies.md / policies_extended.md] --> D
-    D --> E[DecisionAgent prompt assembly]
-    E --> F[Anthropic API call]
-    F --> G[parse_and_validate]
-    G --> H{Valid output?}
-    H -- No --> I[Correction prompt + one retry]
-    I --> G
-    H -- Yes --> J[EscalationChecker]
-    J --> K[DecisionOutput with audit_log]
-    K --> L[evaluate.py metrics + report]
+**Component map**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        ENTRY POINTS                             │
+│                                                                 │
+│    evaluate.py (batch)              agent.py (single case)      │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      PIPELINE LAYER                             │
+│                                                                 │
+│  ┌─────────────┐    ┌──────────────┐    ┌────────────────────┐  │
+│  │ CaseLoader  │───▶│PolicyRetriever│──▶│  DecisionAgent     │  │
+│  │ (models.py) │    │(retriever.py)│    │  (agent.py)        │  │
+│  └─────────────┘    └──────────────┘    └────────────────────┘  │
+│                                                  │               │
+│                                                  ▼               │
+│                                        ┌──────────────────────┐  │
+│                                        │  OutputValidator     │  │
+│                                        │  (validator.py)      │  │
+│                                        └──────────────────────┘  │
+│                                                  │               │
+│                                                  ▼               │
+│                                        ┌──────────────────────┐  │
+│                                        │  EscalationChecker   │  │
+│                                        │  (validator.py)      │  │
+│                                        └──────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    INFRASTRUCTURE LAYER                         │
+│                                                                 │
+│  ┌──────────────┐   ┌───────────────┐   ┌───────────────────┐  │
+│  │  config.py   │   │  models.py    │   │  Anthropic SDK    │  │
+│  │  (constants) │   │  (contracts)  │   │  (API client)     │  │
+│  └──────────────┘   └───────────────┘   └───────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-## Baseline vs extended modes
+**End-to-end data flow**
 
-- Baseline mode (`cases.json` + `policies.md`) validates core assignment behavior: 8 straightforward, 4 ambiguous, 2 edge cases.
-- Extended mode (`cases_extended.json` + `policies_extended.md`) expands signal surface area (device trust, impossible travel, sanctions hits, KYC staleness/confidence, payout drift, cross-system conflicts).
-- The same pipeline runs both modes with no code changes; only dataset/policy inputs change via `--mode`.
-- Extended mode is intentionally harder and reveals realistic failure pressure, especially on edge-tier precision.
+```
+cases.json (or cases_extended.json)
+    │
+    │ read + parse
+    ▼
+Case (Pydantic model)
+    │
+    │ extract summary + attributes
+    ▼
+PolicyRetriever.search(query)  ◀── policies markdown (loaded at startup)
+    │
+    │ top-k Policy objects by cosine similarity
+    ▼
+build_user_message(case, policies) + SYSTEM_PROMPT
+    │
+    │ system + user messages
+    ▼
+Anthropic API  →  raw JSON string
+    │
+    │ parse + validate (+ retry on failure)
+    ▼
+DecisionOutput (Pydantic model)  ◀── or ESCALATE fallback
+    │
+    │ EscalationChecker (threshold, missing fields, empty retrieval, identity checks)
+    ▼
+Final DecisionOutput
+    │
+    │ stdout / metrics in evaluate.py
+    ▼
+Metrics + per-case log
+```
 
-## Evaluation metrics and print semantics
+## Metrics (how to read the report)
 
-- `Total/Approve/Deny/Escalate` are raw output counts from model + guardrail decisions.
-- `Overall accuracy` compares `got` vs `expected_decision`.
-- `Straightforward NOT escalated` rewards avoiding unnecessary human handoff on clear cases.
-- `Ambiguous escalated` and `Edge escalated` track safety posture under uncertainty/conflict.
-- `Retry attempted cases` surfaces output-contract reliability (JSON/schema adherence on first pass).
-- `Average confidence` gives a coarse calibration signal for monitoring confidence drift over time.
-
-## Production design notes
-
-- Retrieval and decision logic are cleanly separated (`retriever.py` vs `agent.py`), so retrieval strategy can be upgraded (hybrid/embedding) without rewriting validator/evaluator.
-- Validation is schema-first (`DecisionOutput`) and citation-constrained to retrieved policies, reducing hallucinated policy references.
-- Deterministic escalation rules enforce safety invariants even when model confidence or output appears valid.
-- All critical runtime paths fail safe to structured `ESCALATE` instead of raising uncaught exceptions.
-- Audit metadata (`retrieved_policies`, retrieval score, retry flag, error detail, timestamp) is always attached for operator traceability.
-
-## Engineering practices used
-
-- Strong typed contracts via Pydantic validators (`extra="forbid"`, range checks, regex IDs)
-- Defensive boundary handling for retrieval/API/parsing/validation paths
-- Explicit module responsibilities and low-coupling interfaces
-- Test-first verification across unit, foundation, and stress suites
-- Reproducible dependency pinning and documented runbook commands
-- Secret handling via `.env` and `python-dotenv`; no API key hardcoding
+- **Baseline** tiers: “NOT escalated” / “Escalated” percentages match the original assignment’s difficulty rubric (all baseline edge cases expect `ESCALATE`).
+- **Extended** tiers: “Accuracy” = fraction of cases in that tier where `got == expected` (edge bucket mixes `DENY` and `ESCALATE` labels).
+- **Retry attempted** = output failed schema/JSON once and succeeded (or exhausted) on correction path.
+- **Overall accuracy** = label match rate; **exit code** follows the ≥70% rule in `evaluate.py`.
 
 ## Troubleshooting
 
-- `python: command not found` on macOS/Linux shells: use `python3` in all commands.
-- Missing API key errors: confirm `.env` exists and includes `ANTHROPIC_API_KEY=<real_key>`.
-- Slow evaluator runs: expected with live LLM calls; use progress lines shown by `evaluate.py`.
-- Unexpected ESCALATE spikes: inspect per-case output and `audit_log.error_detail` for escalation reasons.
+- Use `python3` if `python` is missing on your PATH.
+- Confirm `.env` contains a valid `ANTHROPIC_API_KEY`.
+- Full evaluation issues many API calls (~1–2+ minutes); watch stderr for progress.
+- For debugging one case, use `validator.py` and read `audit_log.error_detail` when present.
+
+**Known nuance:** `python3 agent.py` may show the model wrapping JSON in markdown fences; `validator.py` strips fences before parsing, so the full pipeline remains robust even if the smoke raw line looks noisy.

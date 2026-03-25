@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 from models import Case, DecisionOutput, Policy
 from retriever import PolicyRetriever, build_retrieval_query
@@ -82,15 +83,14 @@ def test_escalation_checker_enforces_missing_field_guardrail():
 
 def test_validate_with_retry_deterministic_fallback_on_repeated_failures(monkeypatch):
     """validate_with_retry should deterministically return fallback escalate after two failures."""
-    monkeypatch.setattr(
-        "validator.call_anthropic_api",
-        lambda *args, **kwargs: '{"bad":"json"}',
+    stub_agent = SimpleNamespace(
+        invoke_model=lambda _sp, _um: '{"bad":"json"}',
     )
     output = validate_with_retry(
         raw_response="{broken",
         case_id="CASE-777",
         retrieved=[Policy(policy_id="POL-001", title="t", rule="r", escalation_note="e")],
-        agent=object(),
+        agent=stub_agent,
         case=_sample_case(),
     )
     assert output.decision == "ESCALATE"

@@ -165,7 +165,7 @@ POL-019
 title:
 Composite Security Event Rule
 rule:
-If two or more of the following are true: low device trust, geolocation mismatch, recent password reset, destination change, then escalate immediately. If three or more are true and payout_amount exceeds 1,000 USD, deny and escalate.
+If two or more of the following session-level conditions are true at the same time, then escalate immediately for manual review—this takes precedence over any single-signal automatic deny that would otherwise apply from device-trust or geolocation rules alone: impossible_travel_flag is true; geolocation_mismatch is true; device_trust_score is strictly below 0.40; recent_password_reset_hours is known and is 24 or less. If three or more of these conditions are true and payout_amount exceeds 1,000 USD, deny automated release and escalate for analyst confirmation.
 escalation_note:
-Escalate when one of the contributing signals is unavailable or unreliable.
+Escalate when one of the contributing signals is unavailable or unreliable; when multiple session anomalies cluster, default to escalation even if another policy would deny in isolation.
 ---

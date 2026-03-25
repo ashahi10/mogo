@@ -70,3 +70,39 @@ def test_build_retrieval_query_enriches_for_risk_and_mismatch():
     query = build_retrieval_query(case)
     assert "high risk" in query
     assert "name mismatch" in query
+
+
+def test_build_retrieval_query_adds_composite_session_phrase_for_multiple_signals():
+    """When several session-level signals co-occur, query should boost POL-019 retrieval."""
+    case = Case(
+        case_id="CASE-905",
+        summary="Rapid login from distant regions and new device payout.",
+        attributes={
+            "case_type": "payout_review",
+            "payout_amount": 1800.0,
+            "identity_verified": True,
+            "verified_name": "Test User",
+            "account_holder_name": "Test User",
+            "recent_profile_changes": 0,
+            "high_risk_flag": False,
+            "account_age_days": 300,
+            "missing_fields": [],
+            "transaction_velocity": 1,
+            "device_trust_score": 0.20,
+            "geolocation_mismatch": True,
+            "impossible_travel_flag": True,
+            "recent_password_reset_hours": 8,
+            "payout_destination_recently_changed": False,
+            "kyc_age_days": 100,
+            "kyc_confidence": 0.9,
+            "sanctions_watchlist_hit": False,
+            "historical_avg_payout": 500.0,
+            "historical_payout_stddev": 50.0,
+            "data_conflict_flag": False,
+        },
+        expected_decision="ESCALATE",
+        difficulty="ambiguous",
+    )
+    query = build_retrieval_query(case)
+    assert "composite security event" in query
+    assert "POL-019" in query
