@@ -97,7 +97,7 @@ By difficulty tier:
 
 Operational indicators:
   Retry attempted cases: 0/14 (0.0%)
-  Average confidence   : 0.778
+  Average confidence   : 0.776
 
 ------------------------------------------------------------
   Per-case breakdown
@@ -117,7 +117,7 @@ Operational indicators:
   CASE-013 | edge            | Expected: ESCALATE  | Got: ESCALATE  | PASS ✓
   CASE-014 | edge            | Expected: ESCALATE  | Got: ESCALATE  | PASS ✓
 ============================================================
-Runtime: 115.43s
+Runtime: 59.83s
 ```
 
 Exit code: `0` if overall accuracy ≥ 70%, else `1`.
@@ -128,7 +128,7 @@ Exit code: `0` if overall accuracy ≥ 70%, else `1`.
 python3 evaluate.py --mode extended
 ```
 
-Same pipeline; uses `cases_extended.json` and `policies_extended.md`. Tier lines use **per-tier accuracy** (because edge cases can expect `DENY` as well as `ESCALATE`). Example from one successful run:
+Same pipeline; uses `cases_extended.json` and `policies_extended.md`. Tier lines use **per-tier accuracy** (because edge cases can expect `DENY` as well as `ESCALATE`). Example from one evaluation run (extended is harder; see CASE-205):
 
 ```text
 ============================================================
@@ -137,19 +137,19 @@ Same pipeline; uses `cases_extended.json` and `policies_extended.md`. Tier lines
 
 Total cases run : 12
 Approve         : 2
-Deny            : 3
-Escalate        : 7
+Deny            : 4
+Escalate        : 6
 
-Overall accuracy (vs labels) : 100.0%  (12/12)
+Overall accuracy (vs labels) : 91.7%  (11/12)
 
 By difficulty tier:
   Straightforward (3) — Accuracy      : 100.0%  (3/3)    ✓ target ≥ 85%
-  Ambiguous       (5) — Accuracy      : 100.0% (5/5)    ✓ target ≥ 75%
+  Ambiguous       (5) — Accuracy      : 80.0% (4/5)    ✓ target ≥ 75%
   Edge cases      (4) — Accuracy      : 100.0% (4/4)    ✓ target ≥ 75%
 
 Operational indicators:
   Retry attempted cases: 0/12 (0.0%)
-  Average confidence   : 0.705
+  Average confidence   : 0.711
 
 ------------------------------------------------------------
   Per-case breakdown
@@ -158,7 +158,7 @@ Operational indicators:
   CASE-202 | straightforward | Expected: DENY      | Got: DENY      | PASS ✓
   CASE-203 | ambiguous       | Expected: ESCALATE  | Got: ESCALATE  | PASS ✓
   CASE-204 | ambiguous       | Expected: ESCALATE  | Got: ESCALATE  | PASS ✓
-  CASE-205 | ambiguous       | Expected: ESCALATE  | Got: ESCALATE  | PASS ✓
+  CASE-205 | ambiguous       | Expected: ESCALATE  | Got: DENY      | FAIL ✗
   CASE-206 | edge            | Expected: DENY      | Got: DENY      | PASS ✓
   CASE-207 | ambiguous       | Expected: ESCALATE  | Got: ESCALATE  | PASS ✓
   CASE-208 | edge            | Expected: DENY      | Got: DENY      | PASS ✓
@@ -167,7 +167,7 @@ Operational indicators:
   CASE-211 | straightforward | Expected: APPROVE   | Got: APPROVE   | PASS ✓
   CASE-212 | edge            | Expected: ESCALATE  | Got: ESCALATE  | PASS ✓
 ============================================================
-Runtime: 111.28s
+Runtime: 56.71s
 ```
 
 Optional environment selector: `EVAL_MODE=extended python3 evaluate.py`

@@ -361,7 +361,7 @@ def confidence_calibration_snapshot(
             sum(output.confidence for output in bucket_outputs) / total if total else 0.0
         )
         entry = {"count": float(total), "avg_confidence": avg_confidence}
-        if expected_by_case_id:
+        if expected_by_case_id and total > 0:
             correct = sum(
                 1
                 for output in bucket_outputs

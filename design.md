@@ -8,7 +8,7 @@ Escalation is treated as a valid governed outcome, not a fallback error path. Th
 
 ## Biggest failure case
 
-The biggest practical failure mode is retrieval miss under vocabulary shift. Short policies plus lexical TF-IDF mean related cases phrased differently can surface weaker context at the top. The model may still sound confident or waver between two partially matching rules, such as a narrow deny path versus a broader escalate-when-clustered clause. Curated assignment data usually aligns vocabulary; the risk grows when real case language drifts from policy wording. Grounding with the right rules still drives quality—retrieval is the bottleneck.
+The biggest practical failure mode is retrieval miss under vocabulary shift. Short policies plus lexical TF-IDF mean related cases phrased differently can surface weaker context at the top. The model may still sound confident or waver between two partially matching rules, such as a narrow deny path versus a broader escalate-when-clustered clause. Curated assignment data usually aligns vocabulary; the risk grows when real case language drifts from policy wording. Grounding with the right rules still drives quality,retrieval is the bottleneck.
 
 ## One thing I'd improve with more time
 
